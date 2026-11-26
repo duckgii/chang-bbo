@@ -20,6 +20,7 @@ services:
   dev:
     <<: *common
     profiles: ["dev"]
+    image: chang-bbo-dev:latest   # make app 이 docker buildx build 로 만든 이미지
     build:
       context: .
       target: dev

@@ -17,14 +17,16 @@ Next.js 15 (App Router) + Supabase + Claude API
 필요한 것: Docker Desktop, Node.js 24, make
 
 ```bash
-make init   # 처음 한 번: 설치 + 로컬 Supabase 시작 + .env.local 자동 설정
-make dev    # 개발 서버 → http://localhost:3000
+make         # 전부 켜기: 설치 → 로컬 Supabase → .env.local 자동 설정 → 앱 빌드·실행
+             #   패키지 설치만 캐시(package-lock.json이 바뀌면 자동 재설치), 코드 빌드는 항상 새로
+make fclean  # 전부 끄기 + 컨테이너·이미지·볼륨·로컬 DB 데이터 삭제
+make re      # fclean 후 캐시 전혀 없이 처음부터 (NOCACHE=1)
 ```
 
 - `.env.local`의 `ANTHROPIC_API_KEY`는 직접 넣어야 합니다 (AI 상담용).
 - 로그인 메일은 실제로 발송되지 않고 http://localhost:54324 에서 확인합니다. `아무개@example.ac.kr`로 가입하세요.
 - Supabase 관리 화면: http://localhost:54323
-- 전체 명령어: `make help` (DB 초기화 `make db-reset`, 배포 이미지 `make build` / `make up`, 검사 `make check` 등)
+- 전체 명령어: `make help` (앱만 다시 빌드 `make app`, 앱만 끄기 `make stop`, 배포 이미지 `make prod`, DB 초기화 `make db-reset`, 검사 `make check` 등)
 
 ## 클라우드 Supabase에 배포할 때
 1. Supabase 프로젝트를 만들고 `supabase/migrations/`를 적용합니다 (`npx supabase link` 후 `npx supabase db push`).

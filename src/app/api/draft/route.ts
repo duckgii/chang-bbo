@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { getAnthropic, MODEL } from "@/lib/ai/client";
+import { aiErrorMessage, getAnthropic, MODEL } from "@/lib/ai/client";
 import { DRAFT_PROMPT } from "@/lib/ai/prompts";
 import { IdeaDraftAI } from "@/lib/idea-schema";
 import { createClient } from "@/lib/supabase/server";
@@ -43,12 +43,9 @@ export async function POST(req: Request) {
     await supabase.from("ai_sessions").update({ status: "drafted" }).eq("id", sessionId);
     return Response.json(response.parsed_output);
   } catch (err) {
-    if (err instanceof Anthropic.RateLimitError) {
-      return new Response("요청이 많아요. 잠시 후 다시 시도해주세요.", { status: 429 });
-    }
     if (err instanceof Anthropic.APIError) {
       console.error("[draft] api error", err.status, err.message);
-      return new Response("AI 서버 오류", { status: 502 });
+      return new Response(aiErrorMessage(err), { status: err.status === 429 ? 429 : 502 });
     }
     console.error("[draft] error", err); // 구조화 출력 파싱 실패 포함
     return new Response("초안 생성 실패", { status: 500 });

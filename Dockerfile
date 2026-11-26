@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 
 FROM node:24-alpine AS base
 WORKDIR /app
@@ -6,9 +5,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 # ── 의존성 ──
 # --ignore-scripts: supabase CLI의 바이너리 다운로드(postinstall)를 건너뜀. 컨테이너 안에서는 쓰지 않는다.
+# 캐시 마운트: `build --no-cache`로 레이어는 매번 새로 만들되, npm이 받은 패키지 파일은 재사용해
+#             네트워크 오류(ECONNRESET)와 빌드 시간을 줄인다.
 FROM base AS deps
 COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --ignore-scripts --prefer-offline --fetch-retries=5 --fetch-retry-mintimeout=5000
 
 # ── 개발용: 소스는 compose에서 볼륨으로 마운트, 코드 수정 시 자동 반영 ──
 FROM base AS dev

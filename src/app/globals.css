@@ -1,26 +1,104 @@
 @import "tailwindcss";
 
+/*
+ * 색은 역할 이름으로만 쓴다 (bg-surface, text-muted, border-line …).
+ * 라이트/다크 값은 여기서만 정의하므로, 컴포넌트에 bg-white·text-zinc-500 같은 고정 색을 쓰지 않는다.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  color-scheme: light;
+  --bg: #f6f6f7;          /* 페이지 바탕 */
+  --surface: #ffffff;     /* 카드·입력칸 */
+  --surface-2: #efeff1;   /* 칩·말풍선·hover */
+  --fg: #18181b;          /* 본문 */
+  --muted: #52525b;       /* 보조 글자 */
+  --subtle: #71717a;      /* 더 약한 보조 글자·placeholder */
+  --line: #e4e4e7;        /* 테두리·구분선 */
+  --primary: #18181b;     /* 주요 버튼·내 말풍선 */
+  --primary-fg: #ffffff;
+  --warn-bg: #fef3c7;
+  --warn-fg: #92400e;
+  --ai-bg: #ede9fe;
+  --ai-fg: #6d28d9;
+  --danger: #dc2626;
+  --focus: #7c3aed;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    color-scheme: dark;   /* 기본 select·checkbox·스크롤바도 어둡게 */
+    --bg: #0e0e11;
+    --surface: #18181c;
+    --surface-2: #26262c;
+    --fg: #ececef;
+    --muted: #b4b4bc;
+    --subtle: #8e8e98;
+    --line: #2f2f36;
+    --primary: #ececef;
+    --primary-fg: #111114;
+    --warn-bg: #3a2a0c;
+    --warn-fg: #fcd34d;
+    --ai-bg: #2a2140;
+    --ai-fg: #c4b5fd;
+    --danger: #f87171;
+    --focus: #a78bfa;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-line: var(--line);
+  --color-primary: var(--primary);
+  --color-primary-fg: var(--primary-fg);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-fg: var(--warn-fg);
+  --color-ai-bg: var(--ai-bg);
+  --color-ai-fg: var(--ai-fg);
+  --color-danger: var(--danger);
+}
+
+@layer base {
+  /* Tailwind v4의 기본 테두리 색은 글자색이라 다크모드에서 너무 밝다 → 역할 색으로 고정 */
+  *,
+  ::before,
+  ::after {
+    border-color: var(--line);
+  }
+
+  /* 기본 글자 크기 16px → 18px. Tailwind 크기·간격이 모두 rem 기준이라 화면 전체가 같은 비율로 커진다.
+     % 단위라 브라우저에서 사용자가 정한 글자 크기 설정도 그대로 반영된다. */
+  html {
+    font-size: 112.5%;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+  }
+
+  input,
+  textarea,
+  select {
+    background-color: var(--surface);
+    color: var(--fg);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--subtle);
+  }
+
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  button:focus-visible,
+  a:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
 }

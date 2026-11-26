@@ -18,14 +18,14 @@ export default async function ProjectsPage() {
       <ul className="mt-6 space-y-3">
         {teams.map(({ role, team }) => team && (
           <li key={team.id}>
-            <Link href={`/projects/${team.id}`} className="block rounded-xl border bg-white p-4 hover:border-zinc-400">
+            <Link href={`/projects/${team.id}`} className="block rounded-xl border bg-surface p-4 hover:border-subtle">
               <p className="font-semibold">{(Array.isArray(team.ideas) ? team.ideas[0] : team.ideas)?.title}</p>
-              <p className="text-xs text-zinc-500">내 역할: {role} · 결성 {new Date(team.created_at).toLocaleDateString("ko-KR")}</p>
+              <p className="text-xs text-muted">내 역할: {role} · 결성 {new Date(team.created_at).toLocaleDateString("ko-KR")}</p>
             </Link>
           </li>
         ))}
       </ul>
-      {!teams.length && <p className="mt-10 text-center text-zinc-500">아직 참여 중인 프로젝트가 없어요.</p>}
+      {!teams.length && <p className="mt-10 text-center text-muted">아직 참여 중인 프로젝트가 없어요.</p>}
     </div>
   );
 }

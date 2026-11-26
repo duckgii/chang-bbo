@@ -10,17 +10,17 @@ export function AccessRequestForm({ ideaId, ndaId, ndaBody }: { ideaId: string; 
   return (
     <div className="mt-3 space-y-3 text-sm">
       <p>해결 방식, 수익 모델, 차별점은 작성자의 승인과 비밀유지 동의 후 볼 수 있어요.</p>
-      <div className="max-h-40 overflow-y-auto rounded bg-zinc-50 p-3 text-xs text-zinc-600">{ndaBody}</div>
+      <div className="max-h-40 overflow-y-auto rounded bg-surface-2 p-3 text-xs text-muted">{ndaBody}</div>
       <label className="flex items-center gap-2">
         <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
         위 비밀유지 내용에 동의합니다 (동의 시각이 기록돼요)
       </label>
       <button disabled={!agreed || pending}
         onClick={() => start(async () => { const r = await requestAccess(ideaId, ndaId); if (r.error) setError(r.error); })}
-        className="rounded bg-zinc-900 px-4 py-2 text-white disabled:opacity-40">
+        className="rounded bg-primary px-4 py-2 text-primary-fg disabled:opacity-40">
         상세 열람 신청
       </button>
-      {error && <p className="text-red-600">{error}</p>}
+      {error && <p className="text-danger">{error}</p>}
     </div>
   );
 }
@@ -41,10 +41,10 @@ export function ApplyForm({ ideaId, roles }: { ideaId: string; roles: string[] }
         className="w-full rounded border px-3 py-2" />
       <button disabled={pending}
         onClick={() => start(async () => { const r = await applyToIdea(ideaId, role, message); if (r.error) setError(r.error); })}
-        className="rounded bg-zinc-900 px-4 py-2 text-white disabled:opacity-40">
+        className="rounded bg-primary px-4 py-2 text-primary-fg disabled:opacity-40">
         지원하기
       </button>
-      {error && <p className="text-red-600">{error}</p>}
+      {error && <p className="text-danger">{error}</p>}
     </div>
   );
 }

@@ -26,7 +26,7 @@ export default async function TeamPage({ params }: { params: Promise<{ teamId: s
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
-      <section className="rounded-xl border bg-white">
+      <section className="rounded-xl border bg-surface">
         <header className="border-b px-4 py-3">
           <h1 className="font-semibold">{idea?.title}</h1>
         </header>
@@ -34,13 +34,13 @@ export default async function TeamPage({ params }: { params: Promise<{ teamId: s
       </section>
 
       <aside className="space-y-4">
-        <div className="rounded-xl border bg-white p-4 text-sm">
+        <div className="rounded-xl border bg-surface p-4 text-sm">
           <h2 className="font-semibold">팀원</h2>
           <ul className="mt-2 space-y-1">
-            {(members ?? []).map((m) => <li key={m.user_id}>{names[m.user_id]} · <span className="text-zinc-500">{m.role}</span></li>)}
+            {(members ?? []).map((m) => <li key={m.user_id}>{names[m.user_id]} · <span className="text-muted">{m.role}</span></li>)}
           </ul>
         </div>
-        <div className="rounded-xl border bg-white p-4 text-sm">
+        <div className="rounded-xl border bg-surface p-4 text-sm">
           <h2 className="font-semibold">이번 주 체크인</h2>
           <form action={submitCheckin.bind(null, teamId)} className="mt-2 space-y-2">
             <select name="status" className="w-full rounded border px-2 py-1.5">
@@ -49,9 +49,9 @@ export default async function TeamPage({ params }: { params: Promise<{ teamId: s
               <option value="stopped">중단</option>
             </select>
             <input name="note" placeholder="한 줄 메모 (선택)" className="w-full rounded border px-2 py-1.5" />
-            <button className="w-full rounded bg-zinc-900 py-1.5 text-white">기록</button>
+            <button className="w-full rounded bg-primary py-1.5 text-primary-fg">기록</button>
           </form>
-          <ul className="mt-3 space-y-1 text-xs text-zinc-600">
+          <ul className="mt-3 space-y-1 text-xs text-muted">
             {(checkins ?? []).map((c) => <li key={c.week}>{c.week} · {CHECKIN_KO[c.status]}{c.note ? ` · ${c.note}` : ""}</li>)}
           </ul>
         </div>

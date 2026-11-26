@@ -32,47 +32,47 @@ export default async function IdeaDetailPage({ params }: { params: Promise<{ id:
   return (
     <article className="space-y-6">
       <header>
-        <span className="text-sm text-zinc-500">{idea.category}</span>
+        <span className="text-sm text-muted">{idea.category}</span>
         <h1 className="mt-1 text-2xl font-bold">{idea.title}</h1>
-        <p className="mt-1 text-xs text-zinc-400">등록 {new Date(idea.created_at).toLocaleString("ko-KR")}</p>
+        <p className="mt-1 text-xs text-subtle">등록 {new Date(idea.created_at).toLocaleString("ko-KR")}</p>
       </header>
 
-      <section className="rounded-xl border bg-white p-5">
-        <h2 className="text-sm font-semibold text-zinc-500">공개 영역</h2>
+      <section className="rounded-xl border bg-surface p-5">
+        <h2 className="text-sm font-semibold text-muted">공개 영역</h2>
         <dl className="mt-3 space-y-4 text-sm">
           <div><dt className="font-medium">문제 정의</dt><dd className="mt-1 whitespace-pre-wrap">{idea.problem}</dd></div>
           <div><dt className="font-medium">타깃 사용자</dt><dd className="mt-1 whitespace-pre-wrap">{idea.target_users}</dd></div>
           <div>
             <dt className="font-medium">필요한 역할</dt>
             <dd className="mt-1 flex flex-wrap gap-1">
-              {(idea.needed_roles as Role[]).map((r) => <span key={r.role} className="rounded bg-zinc-100 px-2 py-0.5">{r.role}</span>)}
+              {(idea.needed_roles as Role[]).map((r) => <span key={r.role} className="rounded bg-surface-2 px-2 py-0.5">{r.role}</span>)}
             </dd>
           </div>
           <div><dt className="font-medium">작성자가 제공할 것</dt><dd className="mt-1">{(idea.provider_offers as string[]).join(", ") || "-"}</dd></div>
         </dl>
       </section>
 
-      <section className="rounded-xl border bg-white p-5">
-        <h2 className="text-sm font-semibold text-zinc-500">상세 영역</h2>
+      <section className="rounded-xl border bg-surface p-5">
+        <h2 className="text-sm font-semibold text-muted">상세 영역</h2>
         {detail ? (
           <dl className="mt-3 space-y-4 text-sm">
             <div><dt className="font-medium">해결 방식</dt><dd className="mt-1 whitespace-pre-wrap">{detail.solution}</dd></div>
             <div><dt className="font-medium">수익 모델</dt><dd className="mt-1 whitespace-pre-wrap">{detail.business_model ?? "미정"}</dd></div>
             <div><dt className="font-medium">차별점</dt><dd className="mt-1 whitespace-pre-wrap">{detail.differentiation ?? "-"}</dd></div>
-            {!isOwner && <p className="text-xs text-zinc-400">이 열람은 기록되며 작성자가 확인할 수 있어요.</p>}
+            {!isOwner && <p className="text-xs text-subtle">이 열람은 기록되며 작성자가 확인할 수 있어요.</p>}
           </dl>
         ) : request?.status === "pending" ? (
           <p className="mt-3 text-sm">열람 신청을 보냈어요. 작성자가 승인하면 볼 수 있어요. (만료 {new Date(request.expires_at).toLocaleDateString("ko-KR")})</p>
         ) : request?.status === "rejected" || request?.status === "expired" ? (
-          <p className="mt-3 text-sm text-zinc-500">열람 신청이 승인되지 않았어요.</p>
+          <p className="mt-3 text-sm text-muted">열람 신청이 승인되지 않았어요.</p>
         ) : nda ? (
           <AccessRequestForm ideaId={id} ndaId={nda.id} ndaBody={nda.body} />
         ) : null}
       </section>
 
       {!isOwner && (
-        <section className="rounded-xl border bg-white p-5">
-          <h2 className="text-sm font-semibold text-zinc-500">팀 합류 지원</h2>
+        <section className="rounded-xl border bg-surface p-5">
+          <h2 className="text-sm font-semibold text-muted">팀 합류 지원</h2>
           {application ? (
             <p className="mt-3 text-sm">지원 상태: {{ pending: "검토 중", accepted: "수락됨 · 프로젝트 채팅에서 확인하세요", rejected: "거절됨" }[application.status as string]}</p>
           ) : (

@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { getAnthropic, MODEL, LIMITS_AI } from "@/lib/ai/client";
+import { aiErrorMessage, getAnthropic, MODEL, LIMITS_AI } from "@/lib/ai/client";
 import { CONSULT_PROMPT } from "@/lib/ai/prompts";
 import { createClient } from "@/lib/supabase/server";
 
@@ -55,10 +55,15 @@ export async function POST(req: Request) {
     .eq("session_id", sessionId)
     .order("id");
 
-  const messages: Anthropic.Beta.BetaMessageParam[] = (history ?? []).map((m) => ({
-    role: m.role as "user" | "assistant",
-    content: m.content as string,
-  }));
+  // 이전 요청이 실패하면 사용자 메시지만 남고 답변이 없다(기록은 삭제 불가).
+  // 연달아 있는 같은 쪽 메시지는 하나로 합쳐서 보낸다.
+  const messages: Anthropic.Beta.BetaMessageParam[] = [];
+  for (const m of history ?? []) {
+    const role = m.role as "user" | "assistant";
+    const last = messages[messages.length - 1];
+    if (last && last.role === role) last.content = `${last.content as string}\n\n${m.content as string}`;
+    else messages.push({ role, content: m.content as string });
+  }
 
   const stream = getAnthropic().beta.messages.stream({
     model: MODEL,
@@ -95,7 +100,7 @@ export async function POST(req: Request) {
         console.log("[consult] usage", JSON.stringify(final.usage));
       } catch (err) {
         console.error("[consult] error", err);
-        controller.enqueue(encoder.encode("\n\n(일시적인 오류가 발생했어요. 잠시 후 다시 시도해주세요.)"));
+        controller.enqueue(encoder.encode(`\n\n(${aiErrorMessage(err)})`));
       } finally {
         controller.close();
       }

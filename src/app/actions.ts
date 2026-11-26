@@ -107,5 +107,6 @@ export async function submitCheckin(teamId: string, formData: FormData): Promise
 export async function signOut(): Promise<void> {
   const supabase = await createClient();
   await supabase.auth.signOut();
+  revalidatePath("/", "layout"); // 상단 메뉴가 로그아웃 상태로 다시 그려지도록
   redirect("/login");
 }

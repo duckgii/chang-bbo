@@ -37,9 +37,9 @@ export function Chat({ teamId, me, names, initial }: { teamId: string; me: strin
       <div className="flex-1 space-y-2 overflow-y-auto p-4">
         {messages.map((m) => (
           <div key={m.id} className={m.sender_id === me ? "text-right" : ""}>
-            {m.sender_id !== me && <p className="text-xs text-zinc-500">{names[m.sender_id] ?? "팀원"}</p>}
+            {m.sender_id !== me && <p className="text-xs text-muted">{names[m.sender_id] ?? "팀원"}</p>}
             <div className={`inline-block max-w-[80%] whitespace-pre-wrap rounded-lg px-3 py-2 text-left text-sm ${
-              m.sender_id === me ? "bg-zinc-900 text-white" : "bg-zinc-100"}`}>{m.body}</div>
+              m.sender_id === me ? "bg-primary text-primary-fg" : "bg-surface-2"}`}>{m.body}</div>
           </div>
         ))}
         <div ref={bottomRef} />
@@ -47,7 +47,7 @@ export function Chat({ teamId, me, names, initial }: { teamId: string; me: strin
       <form onSubmit={send} className="flex gap-2 border-t p-3">
         <input value={text} onChange={(e) => setText(e.target.value)} maxLength={4000}
           placeholder="메시지 입력 (대화 기록은 분쟁 시 증거로 보관돼요)" className="flex-1 rounded border px-3 py-2 text-sm" />
-        <button className="rounded bg-zinc-900 px-4 text-sm text-white">보내기</button>
+        <button className="rounded bg-primary px-4 text-sm text-primary-fg">보내기</button>
       </form>
     </div>
   );

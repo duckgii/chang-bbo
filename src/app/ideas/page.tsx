@@ -32,27 +32,27 @@ export default async function IdeasPage({ searchParams }: { searchParams: Promis
             {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
           </select>
           <input name="role" defaultValue={role ?? ""} placeholder="필요 역할 (예: 백엔드)" className="rounded border px-2 py-1.5" />
-          <button className="rounded bg-zinc-900 px-3 text-white">필터</button>
+          <button className="rounded bg-primary px-3 text-primary-fg">필터</button>
         </form>
       </div>
 
       <ul className="mt-6 grid gap-4 sm:grid-cols-2">
         {filtered.map((i) => (
           <li key={i.id}>
-            <Link href={`/ideas/${i.id}`} className="block h-full rounded-xl border bg-white p-5 hover:border-zinc-400">
-              <span className="text-xs text-zinc-500">{i.category}</span>
+            <Link href={`/ideas/${i.id}`} className="block h-full rounded-xl border bg-surface p-5 hover:border-subtle">
+              <span className="text-xs text-muted">{i.category}</span>
               <h2 className="mt-1 font-semibold">{i.title}</h2>
-              <p className="mt-2 line-clamp-3 text-sm text-zinc-600">{i.problem}</p>
+              <p className="mt-2 line-clamp-3 text-sm text-muted">{i.problem}</p>
               <div className="mt-3 flex flex-wrap gap-1">
                 {(i.needed_roles as Role[]).map((r) => (
-                  <span key={r.role} className="rounded bg-zinc-100 px-2 py-0.5 text-xs">{r.role}</span>
+                  <span key={r.role} className="rounded bg-surface-2 px-2 py-0.5 text-xs">{r.role}</span>
                 ))}
               </div>
             </Link>
           </li>
         ))}
       </ul>
-      {filtered.length === 0 && <p className="mt-10 text-center text-zinc-500">조건에 맞는 아이디어가 아직 없어요.</p>}
+      {filtered.length === 0 && <p className="mt-10 text-center text-muted">조건에 맞는 아이디어가 아직 없어요.</p>}
     </div>
   );
 }
