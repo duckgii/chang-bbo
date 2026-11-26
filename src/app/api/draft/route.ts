@@ -41,7 +41,20 @@ export async function POST(req: Request) {
       return new Response("초안을 만들지 못했어요. 상담을 조금 더 진행한 뒤 다시 시도해주세요.", { status: 422 });
     }
     await supabase.from("ai_sessions").update({ status: "drafted" }).eq("id", sessionId);
-    return Response.json(response.parsed_output);
+    // 모델이 "public.title"처럼 경로로 줄 때가 있어 화면에서 쓰는 키("title")로 맞춘다.
+    const toKey = (f: string) => f.split(".").pop() ?? f;
+    const draft = response.parsed_output;
+    // 모델이 값을 채워 놓고도 '빠진 항목'으로 표시하는 경우가 있어 실제 값 기준으로 다시 거른다.
+    const values: Record<string, unknown> = {
+      ...draft.public, ...draft.detail, needed_roles: draft.needed_roles, provider_offers: draft.provider_offers,
+    };
+    const isEmpty = (v: unknown) => v == null || (typeof v === "string" ? !v.trim() : Array.isArray(v) && !v.length);
+    return Response.json({
+      ...draft,
+      missing_fields: [...new Set(draft.missing_fields.map(toKey))].filter((k) => isEmpty(values[k])),
+      ai_suggested_fields: [...new Set(draft.ai_suggested_fields.map(toKey))],
+      risks: draft.risks.slice(0, 3),
+    });
   } catch (err) {
     if (err instanceof Anthropic.APIError) {
       console.error("[draft] api error", err.status, err.message);

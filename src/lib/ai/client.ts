@@ -8,7 +8,9 @@ export function getAnthropic(): Anthropic {
   return client;
 }
 
-export const MODEL = "claude-opus-5-5";
+// 비용 우선: Haiku 5.5 ($0.10 / $0.50 per 1M tokens, 100K 토큰 이하 프롬프트 기준).
+// 초안 품질이 부족하면 claude-sonnet-5-5 ($2 / $10)로 올리는 것을 검토.
+export const MODEL = "claude-haiku-5-5";
 
 // 사용자에게 보여줄 오류 문구. 상세 원인(잔액, 키 등)은 서버 로그에만 남긴다.
 export function aiErrorMessage(err: unknown): string {

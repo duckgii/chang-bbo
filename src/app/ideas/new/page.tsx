@@ -4,9 +4,17 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useRef, useState, useTransition } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { submitIdea } from "@/app/actions";
+import type { ConsultTurn } from "@/lib/ai/consult-schema";
 import { CATEGORIES, FIELD_LABELS, IdeaForm, LIMITS, type IdeaDraft, type IdeaFormValues } from "@/lib/idea-schema";
 
-type ChatMsg = { role: "user" | "assistant"; content: string };
+type ChatMsg =
+  | { role: "user"; content: string }
+  | { role: "assistant"; content: string; turn?: ConsultTurn };
+
+const FIELD_STEP: Record<string, string> = {
+  problem: "문제 정의", target_users: "타깃 사용자", solution: "해결 방식", business_model: "수익 모델",
+  differentiation: "차별점", needed_roles: "필요한 역할", provider_offers: "내가 제공할 것", wrapup: "마무리",
+};
 
 const EMPTY: IdeaFormValues = {
   public: { title: "", problem: "", target_users: "", category: "기타" },
@@ -22,12 +30,14 @@ export default function NewIdeaPage() {
     { role: "assistant", content: "안녕하세요! 어떤 아이디어인지 한두 문장으로 알려주세요. 같이 양식을 채울 수 있게 하나씩 여쭤볼게요." },
   ]);
   const [input, setInput] = useState("");
-  const [streaming, setStreaming] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
   const [drafting, setDrafting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [aiFields, setAiFields] = useState<string[]>([]);
   const [missing, setMissing] = useState<string[]>([]);
   const [followups, setFollowups] = useState<string[]>([]);
+  const [risks, setRisks] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // ── 등록 양식 ──
@@ -37,42 +47,54 @@ export default function NewIdeaPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, startSubmit] = useTransition();
 
-  async function send(e: React.FormEvent) {
-    e.preventDefault();
-    const text = input.trim();
-    if (!text || streaming) return;
+  const last = chat[chat.length - 1];
+  const currentTurn = last.role === "assistant" ? last.turn : undefined;
+  const finished = currentTurn?.done ?? false;
+
+  // picks: AI 후보에서 고른 답, typed: 직접 입력한 답 (서버가 둘을 구분해 기록)
+  async function send(picks: string[], typed: string) {
+    const text = typed.trim();
+    if ((!picks.length && !text) || loading) return;
     setInput("");
+    setSelected([]);
     setNotice(null);
-    setChat((c) => [...c, { role: "user", content: text }, { role: "assistant", content: "" }]);
-    setStreaming(true);
+    setChat((c) => [...c, { role: "user", content: [picks.join(", "), text].filter(Boolean).join("\n") }]);
+    setLoading(true);
     try {
       const res = await fetch("/api/consult", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, message: text }),
+        body: JSON.stringify({ sessionId, message: text, picked: picks }),
       });
-      if (!res.ok || !res.body) {
+      const sid = res.headers.get("X-Session-Id");
+      if (sid) setSessionId(sid);
+      if (!res.ok) {
         setNotice(await res.text());
-        setChat((c) => c.slice(0, -1));
         return;
       }
-      setSessionId(res.headers.get("X-Session-Id"));
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        setChat((c) => {
-          const next = [...c];
-          next[next.length - 1] = { role: "assistant", content: next[next.length - 1].content + chunk };
-          return next;
-        });
-        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-      }
+      const data = (await res.json()) as { sessionId: string; turn: ConsultTurn };
+      setSessionId(data.sessionId);
+      setChat((c) => [...c, { role: "assistant", content: data.turn.reply, turn: data.turn }]);
+    } catch {
+      setNotice("네트워크 오류가 발생했어요. 다시 시도해 주세요.");
     } finally {
-      setStreaming(false);
+      setLoading(false);
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     }
+  }
+
+  function onPick(option: string) {
+    if (!currentTurn) return;
+    if (currentTurn.multi_select) {
+      setSelected((sel) => (sel.includes(option) ? sel.filter((o) => o !== option) : [...sel, option]));
+    } else {
+      void send([option], "");
+    }
+  }
+
+  function onSubmitTyped(e: React.FormEvent) {
+    e.preventDefault();
+    void send(currentTurn?.multi_select ? selected : [], input);
   }
 
   async function makeDraft() {
@@ -101,6 +123,7 @@ export default function NewIdeaPage() {
       setAiFields(d.ai_suggested_fields);
       setMissing(d.missing_fields);
       setFollowups(d.followup_questions);
+      setRisks(d.risks);
       void form.trigger(); // 글자 수 초과 등을 바로 표시
     } finally {
       setDrafting(false);
@@ -151,26 +174,62 @@ export default function NewIdeaPage() {
             상담 내용은 AI 처리를 위해 Anthropic(미국)으로 전송되며, 상담 기록은 본인만 볼 수 있어요. 원하지 않으면 오른쪽 양식만 직접 작성해도 됩니다.
           </p>
         </div>
-        <div className="flex-1 space-y-3 overflow-y-auto p-4">
+        <div className="flex-1 space-y-4 overflow-y-auto p-4">
           {chat.map((m, i) => (
             <div key={i} className={m.role === "user" ? "text-right" : ""}>
+              {m.role === "assistant" && m.turn && (
+                <p className="mb-1 text-xs text-subtle">{FIELD_STEP[m.turn.field]}</p>
+              )}
               <div className={`inline-block max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-left text-sm ${
                 m.role === "user" ? "bg-primary text-primary-fg" : "bg-surface-2"}`}>
-                {m.content || (streaming && i === chat.length - 1 ? "…" : "")}
+                {m.content}
+                {m.role === "assistant" && m.turn && <p className="mt-2 font-semibold">{m.turn.question}</p>}
               </div>
             </div>
           ))}
+
+          {/* 최신 질문의 답변 후보 */}
+          {currentTurn && !finished && currentTurn.options.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted">
+                {currentTurn.multi_select ? "해당하는 것을 모두 고른 뒤 [선택 완료]를 누르세요" : "하나를 고르세요"} · 맞는 게 없으면 아래에 직접 입력
+              </p>
+              {currentTurn.options.map((o) => {
+                const on = selected.includes(o);
+                return (
+                  <button key={o} type="button" disabled={loading} onClick={() => onPick(o)}
+                    className={`block w-full rounded-lg border px-3 py-2 text-left text-sm transition disabled:opacity-50 ${
+                      on ? "border-ai-fg bg-ai-bg text-ai-fg" : "bg-surface hover:bg-surface-2"}`}>
+                    {currentTurn.multi_select && <span className="mr-2">{on ? "☑" : "☐"}</span>}
+                    {o}
+                  </button>
+                );
+              })}
+              {currentTurn.multi_select && (
+                <button type="button" disabled={loading || (!selected.length && !input.trim())}
+                  onClick={() => void send(selected, input)}
+                  className="w-full rounded-lg bg-primary py-2 text-sm text-primary-fg disabled:opacity-40">
+                  선택 완료{selected.length ? ` (${selected.length})` : ""}
+                </button>
+              )}
+            </div>
+          )}
+          {loading && <p className="text-sm text-muted">AI가 다음 질문을 준비하고 있어요…</p>}
           <div ref={bottomRef} />
         </div>
         {notice && <p className="px-4 pb-2 text-sm text-warn-fg">{notice}</p>}
-        <form onSubmit={send} className="flex gap-2 border-t p-3">
-          <input value={input} onChange={(e) => setInput(e.target.value)} maxLength={2000}
-            placeholder="답변을 입력하세요" className="flex-1 rounded border px-3 py-2 text-sm" />
-          <button disabled={streaming} className="rounded bg-primary px-4 text-sm text-primary-fg disabled:opacity-50">보내기</button>
-        </form>
+        {!finished && (
+          <form onSubmit={onSubmitTyped} className="flex gap-2 border-t p-3">
+            <input value={input} onChange={(e) => setInput(e.target.value)} maxLength={2000}
+              placeholder={currentTurn ? "기타 · 직접 입력 (선택한 후보에 덧붙여 보낼 수도 있어요)" : "아이디어를 한두 문장으로 적어주세요"}
+              className="flex-1 rounded border px-3 py-2 text-sm" />
+            <button disabled={loading || !input.trim()} className="rounded bg-primary px-4 text-sm text-primary-fg disabled:opacity-50">보내기</button>
+          </form>
+        )}
         <div className="border-t p-3">
-          <button onClick={makeDraft} disabled={!sessionId || drafting || streaming}
-            className="w-full rounded border border-ai-fg py-2 text-sm font-medium text-ai-fg disabled:opacity-40">
+          <button onClick={makeDraft} disabled={!sessionId || drafting || loading}
+            className={`w-full rounded py-2 text-sm font-medium disabled:opacity-40 ${
+              finished ? "bg-ai-fg text-surface" : "border border-ai-fg text-ai-fg"}`}>
             {drafting ? "초안 작성 중…" : "초안 만들기 → 오른쪽 양식 채우기"}
           </button>
         </div>
@@ -179,6 +238,12 @@ export default function NewIdeaPage() {
       {/* 오른쪽: 등록 양식 */}
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 rounded-xl border bg-surface p-5">
         <h2 className="font-semibold">아이디어 등록</h2>
+        {risks.length > 0 && (
+          <div className="rounded bg-surface-2 p-3 text-sm">
+            <p className="font-medium">출시 전에 확인해 볼 점</p>
+            <ol className="mt-1 list-decimal space-y-1 pl-5 text-muted">{risks.map((r) => <li key={r}>{r}</li>)}</ol>
+          </div>
+        )}
         {followups.length > 0 && (
           <div className="rounded bg-warn-bg p-3 text-sm">
             <p className="font-medium text-warn-fg">더 채우면 좋은 부분</p>

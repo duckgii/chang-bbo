@@ -50,11 +50,18 @@ function build(strict: boolean) {
 export const IdeaForm = build(true);
 export type IdeaFormValues = z.infer<typeof IdeaForm>;
 
+// 구조화 출력이 이 값들만 내도록 enum으로 강제 (자유 문자열이면 엉뚱한 키가 섞임)
+export const FIELD_KEYS = [
+  "title", "problem", "target_users", "category", "solution",
+  "business_model", "differentiation", "needed_roles", "provider_offers",
+] as const;
+
 export const IdeaDraftAI = build(false).extend({
-  missing_fields: z.array(z.string()).describe("상담에서 답이 나오지 않은 필드 키 (예: business_model)"),
+  missing_fields: z.array(z.enum(FIELD_KEYS)).describe("상담에서 답이 나오지 않은 필드"),
   followup_questions: z.array(z.string()).describe("사용자에게 추가로 물어볼 질문 (최대 3개)"),
+  risks: z.array(z.string()).describe("출시 전에 확인해 볼 약점·가정 3가지. 각각 '가정 - 확인 방법' 형식"),
   ai_suggested_fields: z
-    .array(z.string())
-    .describe("사용자가 말하지 않았는데 AI가 제안한 내용이 들어간 필드 키"),
+    .array(z.enum(FIELD_KEYS))
+    .describe("AI 후보에서 고른 내용이나 사용자가 말하지 않은 내용이 들어간 필드"),
 });
 export type IdeaDraft = z.infer<typeof IdeaDraftAI>;
