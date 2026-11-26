@@ -31,7 +31,7 @@ export function aiErrorMessage(err: unknown): string {
 
 // 남용 방지
 export const LIMITS_AI = {
-  sessionsPerDay: 3,
+  sessionsPerDay: 30, // AI가 한 번이라도 답한 상담(= 아이디어 하나)만 센다
   userTurnsPerSession: 20,
   maxUserMessageChars: 2000,
 };

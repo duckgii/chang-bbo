@@ -1,10 +1,11 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { submitIdea } from "@/app/actions";
 import type { ConsultTurn } from "@/lib/ai/consult-schema";
+import { createClient } from "@/lib/supabase/client";
 import { CATEGORIES, FIELD_LABELS, IdeaForm, LIMITS, type IdeaDraft, type IdeaFormValues } from "@/lib/idea-schema";
 
 type ChatMsg =
@@ -23,12 +24,16 @@ const EMPTY: IdeaFormValues = {
   provider_offers: [],
 };
 
+const GREETING: ChatMsg = {
+  role: "assistant",
+  content: "안녕하세요! 어떤 아이디어인지 한두 문장으로 알려주세요. 그다음부터는 제가 드리는 후보 중에서 고르기만 하면 돼요.",
+};
+
 export default function NewIdeaPage() {
   // ── AI 상담 ──
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [chat, setChat] = useState<ChatMsg[]>([
-    { role: "assistant", content: "안녕하세요! 어떤 아이디어인지 한두 문장으로 알려주세요. 같이 양식을 채울 수 있게 하나씩 여쭤볼게요." },
-  ]);
+  const [chat, setChat] = useState<ChatMsg[]>([GREETING]);
+  const [quota, setQuota] = useState<{ used: number; limit: number } | null>(null);
   const [input, setInput] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -51,6 +56,42 @@ export default function NewIdeaPage() {
   const currentTurn = last.role === "assistant" ? last.turn : undefined;
   const finished = currentTurn?.done ?? false;
 
+  // 새로고침해도 진행 중인 상담을 이어간다 (같은 아이디어로 횟수가 다시 차감되지 않도록)
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch("/api/consult");
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        quota: { used: number; limit: number };
+        session: { sessionId: string; messages: ChatMsg[] } | null;
+      };
+      setQuota(data.quota);
+      if (data.session) {
+        setSessionId(data.session.sessionId);
+        setChat([GREETING, ...data.session.messages]);
+        setTimeout(() => bottomRef.current?.scrollIntoView(), 50);
+      }
+    })();
+  }, []);
+
+  // 지금 상담을 닫고 새 아이디어 상담을 시작 (다음 첫 메시지에서 1회 차감)
+  async function startNewIdea() {
+    if (sessionId) {
+      await createClient().from("ai_sessions").update({ status: "closed" }).eq("id", sessionId);
+    }
+    setSessionId(null);
+    setChat([GREETING]);
+    setSelected([]);
+    setInput("");
+    setNotice(null);
+    setAiFields([]);
+    setMissing([]);
+    setFollowups([]);
+    setRisks([]);
+    form.reset(EMPTY);
+    setOffersText("");
+  }
+
   // picks: AI 후보에서 고른 답, typed: 직접 입력한 답 (서버가 둘을 구분해 기록)
   async function send(picks: string[], typed: string) {
     const text = typed.trim();
@@ -72,8 +113,9 @@ export default function NewIdeaPage() {
         setNotice(await res.text());
         return;
       }
-      const data = (await res.json()) as { sessionId: string; turn: ConsultTurn };
+      const data = (await res.json()) as { sessionId: string; turn: ConsultTurn; quota: { used: number; limit: number } };
       setSessionId(data.sessionId);
+      setQuota(data.quota);
       setChat((c) => [...c, { role: "assistant", content: data.turn.reply, turn: data.turn }]);
     } catch {
       setNotice("네트워크 오류가 발생했어요. 다시 시도해 주세요.");
@@ -169,7 +211,21 @@ export default function NewIdeaPage() {
       {/* 왼쪽: AI 상담 */}
       <section className="flex h-[75vh] flex-col rounded-xl border bg-surface">
         <div className="border-b px-4 py-3">
-          <h2 className="font-semibold">AI와 아이디어 다듬기</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold">AI와 아이디어 다듬기</h2>
+            <div className="flex items-center gap-2 text-xs">
+              {quota && (
+                <span className="text-muted">오늘 남은 상담 {Math.max(quota.limit - quota.used, 0)}/{quota.limit}</span>
+              )}
+              {sessionId && (
+                <button type="button" onClick={() => void startNewIdea()} disabled={loading}
+                  className="rounded border px-2 py-1 hover:bg-surface-2 disabled:opacity-50">
+                  새 아이디어로 시작
+                </button>
+              )}
+            </div>
+          </div>
+          <p className="mt-1 text-xs text-muted">상담 횟수는 질문 수와 상관없이 아이디어 하나당 1회 차감돼요.</p>
           <p className="text-xs text-muted">
             상담 내용은 AI 처리를 위해 Anthropic(미국)으로 전송되며, 상담 기록은 본인만 볼 수 있어요. 원하지 않으면 오른쪽 양식만 직접 작성해도 됩니다.
           </p>

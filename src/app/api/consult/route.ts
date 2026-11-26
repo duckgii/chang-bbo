@@ -8,6 +8,68 @@ import { createClient } from "@/lib/supabase/server";
 export const maxDuration = 120;
 
 type Body = { sessionId?: string; message?: string; picked?: string[] };
+type Supabase = Awaited<ReturnType<typeof createClient>>;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// 오늘(최근 24시간) 사용한 상담 수 = AI가 한 번이라도 답한 상담 수.
+// 질문 수와 무관하고, AI 오류로 실패한 시도도 세지 않는다.
+async function usedToday(supabase: Supabase, userId: string): Promise<number> {
+  const { count } = await supabase
+    .from("ai_sessions")
+    .select("id, ai_messages!inner(id)", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gte("created_at", new Date(Date.now() - DAY_MS).toISOString())
+    .eq("ai_messages.role", "assistant");
+  return count ?? 0;
+}
+
+// 화면에 보여줄 사용자 답변 (저장용 표시 제거)
+function displayUserText(content: string): string {
+  return content
+    .split("\n")
+    .map((l) => l.replace(PICKED_PREFIX, "").replace(TYPED_PREFIX, "").trim())
+    .join("\n");
+}
+
+// 새로고침해도 이어갈 수 있도록: 남은 횟수 + 진행 중인 상담(아직 등록 안 한 최근 상담)
+export async function GET() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return new Response("unauthorized", { status: 401 });
+
+  const used = await usedToday(supabase, user.id);
+  const { data: active } = await supabase
+    .from("ai_sessions")
+    .select("id")
+    .eq("user_id", user.id)
+    .is("idea_id", null)
+    .neq("status", "closed")
+    .gte("created_at", new Date(Date.now() - DAY_MS).toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let session: { sessionId: string; messages: { role: "user" | "assistant"; content: string; turn?: ConsultTurn }[] } | null = null;
+  if (active) {
+    const { data: rows } = await supabase
+      .from("ai_messages")
+      .select("role, content, meta")
+      .eq("session_id", active.id)
+      .order("id");
+    if (rows?.length) {
+      session = {
+        sessionId: active.id as string,
+        messages: rows.map((m) =>
+          m.role === "assistant" && m.meta
+            ? { role: "assistant", content: (m.meta as ConsultTurn).reply, turn: m.meta as ConsultTurn }
+            : { role: m.role as "user" | "assistant", content: m.role === "user" ? displayUserText(m.content) : m.content },
+        ),
+      };
+    }
+  }
+  return Response.json({ quota: { used, limit: LIMITS_AI.sessionsPerDay }, session });
+}
 
 // 대화 기록은 클라이언트가 보낸 것을 믿지 않고 DB에서 다시 읽는다.
 // (가짜 assistant 턴 주입 방지 + 상담 기록을 증거로 남기기 위함)
@@ -33,14 +95,9 @@ export async function POST(req: Request) {
 
   let sessionId = rawSessionId;
   if (!sessionId) {
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { count } = await supabase
-      .from("ai_sessions")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .gte("created_at", since);
-    if ((count ?? 0) >= LIMITS_AI.sessionsPerDay) {
-      return new Response("오늘 상담 횟수를 모두 사용했어요. 내일 다시 시도해주세요.", { status: 429 });
+    // 새 상담(= 새 아이디어)을 시작할 때만 한도를 확인한다. 이어서 묻는 질문은 횟수에 영향 없음.
+    if ((await usedToday(supabase, user.id)) >= LIMITS_AI.sessionsPerDay) {
+      return new Response(`오늘 상담 ${LIMITS_AI.sessionsPerDay}회를 모두 사용했어요. 내일 다시 시도해주세요.`, { status: 429 });
     }
     const { data, error } = await supabase.from("ai_sessions").insert({ user_id: user.id }).select("id").single();
     if (error) return new Response(error.message, { status: 500 });
@@ -98,8 +155,11 @@ export async function POST(req: Request) {
       ...response.parsed_output,
       options: response.parsed_output.done ? [] : response.parsed_output.options.slice(0, 4),
     };
-    await supabase.from("ai_messages").insert({ session_id: sessionId, role: "assistant", content: turnToText(turn) });
-    return Response.json({ sessionId, turn });
+    await supabase
+      .from("ai_messages")
+      .insert({ session_id: sessionId, role: "assistant", content: turnToText(turn), meta: turn });
+    const used = await usedToday(supabase, user.id);
+    return Response.json({ sessionId, turn, quota: { used, limit: LIMITS_AI.sessionsPerDay } });
   } catch (err) {
     console.error("[consult] error", err);
     return new Response(aiErrorMessage(err), { status: 502, headers: { "X-Session-Id": sessionId } });
