@@ -26,7 +26,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {user && (
           <header className="border-b bg-surface">
             <nav className="mx-auto flex max-w-5xl items-center gap-1 overflow-x-auto px-4 py-3 text-sm">
-              <Link href="/ideas" className="mr-4 shrink-0 font-bold">창뿌</Link>
+              <Link href="/ideas" className="mr-4 shrink-0 font-bold">창뽀</Link>
               {NAV.map((n) => (
                 <Link key={n.href} href={n.href} className="shrink-0 rounded px-3 py-1.5 hover:bg-surface-2">
                   {n.label}

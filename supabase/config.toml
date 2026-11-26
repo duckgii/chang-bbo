@@ -246,11 +246,11 @@ otp_expiry = 3600
 
 # 로그인용 6자리 코드 메일 (앱은 magic link가 아니라 코드 입력 방식)
 [auth.email.template.magic_link]
-subject = "[창뿌] 로그인 인증 코드"
+subject = "[창뽀] 로그인 인증 코드"
 content_path = "./supabase/templates/magic_link.html"
 
 [auth.email.template.confirmation]
-subject = "[창뿌] 가입 인증 코드"
+subject = "[창뽀] 가입 인증 코드"
 content_path = "./supabase/templates/magic_link.html"
 
 # Uncomment to customize email template
