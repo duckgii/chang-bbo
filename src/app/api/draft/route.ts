@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { anthropic, MODEL } from "@/lib/ai/client";
+import { getAnthropic, MODEL } from "@/lib/ai/client";
 import { DRAFT_PROMPT } from "@/lib/ai/prompts";
 import { IdeaDraftAI } from "@/lib/idea-schema";
 import { createClient } from "@/lib/supabase/server";
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     .join("\n\n");
 
   try {
-    const response = await anthropic.messages.parse({
+    const response = await getAnthropic().messages.parse({
       model: MODEL,
       max_tokens: 16000,
       output_config: { effort: "medium", format: zodOutputFormat(IdeaDraftAI) },

@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { anthropic, MODEL, LIMITS_AI } from "@/lib/ai/client";
+import { getAnthropic, MODEL, LIMITS_AI } from "@/lib/ai/client";
 import { CONSULT_PROMPT } from "@/lib/ai/prompts";
 import { createClient } from "@/lib/supabase/server";
 
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     content: m.content as string,
   }));
 
-  const stream = anthropic.beta.messages.stream({
+  const stream = getAnthropic().beta.messages.stream({
     model: MODEL,
     max_tokens: 16000,
     // 안전 분류기가 거절하면 서버 측에서 다른 모델로 이어서 답하게 한다.

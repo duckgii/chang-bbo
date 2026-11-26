@@ -1,0 +1,45 @@
+name: chang-bbo
+
+# 로컬 Supabase는 Supabase CLI(`make db-start`)로 따로 띄운다.
+# 컨테이너 안 서버는 host.docker.internal 로 호스트의 Supabase에 접속한다.
+
+x-common: &common
+  ports:
+    - "3000:3000"
+  env_file:
+    - path: .env.local
+      required: true
+  environment:
+    # 서버 → Supabase 주소. 비어 있으면 NEXT_PUBLIC_SUPABASE_URL을 그대로 쓴다(클라우드 Supabase).
+    SUPABASE_URL: ${DOCKER_SUPABASE_URL:-}
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+services:
+  # make dev: 코드 수정이 바로 반영되는 개발 서버
+  dev:
+    <<: *common
+    profiles: ["dev"]
+    build:
+      context: .
+      target: dev
+    environment:
+      SUPABASE_URL: ${DOCKER_SUPABASE_URL:-}
+      WATCHPACK_POLLING: "true"   # macOS 볼륨에서 파일 변경 감지
+    volumes:
+      - .:/app
+      - /app/node_modules         # 호스트(macOS)의 node_modules가 리눅스 컨테이너를 덮어쓰지 않게
+      - /app/.next
+
+  # make up: 배포와 같은 방식으로 빌드한 이미지 실행
+  web:
+    <<: *common
+    profiles: ["prod"]
+    build:
+      context: .
+      target: runner
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    image: chang-bbo-web:latest
+    restart: unless-stopped
