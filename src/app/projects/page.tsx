@@ -20,7 +20,7 @@ export default async function ProjectsPage() {
           <li key={team.id}>
             <Link href={`/projects/${team.id}`} className="block rounded-xl border bg-surface p-4 hover:border-subtle">
               <p className="font-semibold">{(Array.isArray(team.ideas) ? team.ideas[0] : team.ideas)?.title}</p>
-              <p className="text-xs text-muted">내 역할: {role} · 결성 {new Date(team.created_at).toLocaleDateString("ko-KR")}</p>
+              <p className="text-xs text-muted">내 역할: {role === "owner" ? "아이디어 제공자" : role} · 결성 {new Date(team.created_at).toLocaleDateString("ko-KR")}</p>
             </Link>
           </li>
         ))}

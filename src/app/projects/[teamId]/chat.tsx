@@ -8,7 +8,10 @@ type Msg = { id: number; sender_id: string; body: string; created_at: string };
 export function Chat({ teamId, me, names, initial }: { teamId: string; me: string; names: Record<string, string>; initial: Msg[] }) {
   const [messages, setMessages] = useState<Msg[]>(initial);
   const [text, setText] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
+  // 대화창 안쪽만 스크롤 (scrollIntoView는 페이지 전체까지 끌어내린다)
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollToBottom = (smooth = true) =>
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: smooth ? "smooth" : "auto" });
   const supabase = useRef(createClient()).current;
 
   useEffect(() => {
@@ -21,7 +24,7 @@ export function Chat({ teamId, me, names, initial }: { teamId: string; me: strin
     return () => { void supabase.removeChannel(channel); };
   }, [supabase, teamId]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => { scrollToBottom(); }, [messages]);
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
@@ -34,7 +37,7 @@ export function Chat({ teamId, me, names, initial }: { teamId: string; me: strin
 
   return (
     <div className="flex h-[65vh] flex-col">
-      <div className="flex-1 space-y-2 overflow-y-auto p-4">
+      <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto p-4">
         {messages.map((m) => (
           <div key={m.id} className={m.sender_id === me ? "text-right" : ""}>
             {m.sender_id !== me && <p className="text-xs text-muted">{names[m.sender_id] ?? "팀원"}</p>}
@@ -42,7 +45,6 @@ export function Chat({ teamId, me, names, initial }: { teamId: string; me: strin
               m.sender_id === me ? "bg-primary text-primary-fg" : "bg-surface-2"}`}>{m.body}</div>
           </div>
         ))}
-        <div ref={bottomRef} />
       </div>
       <form onSubmit={send} className="flex gap-2 border-t p-3">
         <input value={text} onChange={(e) => setText(e.target.value)} maxLength={4000}

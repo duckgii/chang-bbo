@@ -35,7 +35,10 @@ export default function NewIdeaPage() {
   const [draft, setDraft] = useState<DraftInfo | null>(null);
   const [formKey, setFormKey] = useState(0); // 새 아이디어 시작 시 양식을 비우기 위해 다시 마운트
   const [similar, setSimilar] = useState<{ checkId: string | null; matches: SimilarMatch[]; values: IdeaFormValues } | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  // 대화창 안쪽만 스크롤 (scrollIntoView는 페이지 전체까지 끌어내린다)
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollToBottom = (smooth = true) =>
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: smooth ? "smooth" : "auto" });
 
   const last = chat[chat.length - 1];
   const currentTurn = last.role === "assistant" ? last.turn : undefined;
@@ -54,7 +57,7 @@ export default function NewIdeaPage() {
       if (data.session) {
         setSessionId(data.session.sessionId);
         setChat([GREETING, ...data.session.messages]);
-        setTimeout(() => bottomRef.current?.scrollIntoView(), 50);
+        setTimeout(() => scrollToBottom(false), 50);
       }
     })();
   }, []);
@@ -102,7 +105,7 @@ export default function NewIdeaPage() {
       setNotice("네트워크 오류가 발생했어요. 다시 시도해 주세요.");
     } finally {
       setLoading(false);
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      setTimeout(() => scrollToBottom(), 50);
     }
   }
 
@@ -153,7 +156,7 @@ export default function NewIdeaPage() {
     }
   }
 
-  // 등록 전에 같은 학교의 비슷한 아이디어를 확인. 있으면 안내창을 띄우고, 없거나 확인에 실패하면 바로 등록.
+  // 등록 전에 비슷한 아이디어를 확인. 있으면 안내창을 띄우고, 없거나 확인에 실패하면 바로 등록.
   async function handleSubmit(values: IdeaFormValues) {
     try {
       const res = await fetch("/api/similar", {
@@ -216,7 +219,7 @@ export default function NewIdeaPage() {
             상담 내용은 AI 처리를 위해 Anthropic(미국)으로 전송되며, 상담 기록은 본인만 볼 수 있어요. 원하지 않으면 오른쪽 양식만 직접 작성해도 됩니다.
           </p>
         </div>
-        <div className="flex-1 space-y-4 overflow-y-auto p-4">
+        <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-4">
           {chat.map((m, i) => (
             <div key={i} className={m.role === "user" ? "text-right" : ""}>
               {m.role === "assistant" && m.turn && (
@@ -257,7 +260,6 @@ export default function NewIdeaPage() {
             </div>
           )}
           {loading && <p className="text-sm text-muted">AI가 다음 질문을 준비하고 있어요…</p>}
-          <div ref={bottomRef} />
         </div>
         {notice && <p className="px-4 pb-2 text-sm text-warn-fg">{notice}</p>}
         {!finished && (

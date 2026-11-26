@@ -37,7 +37,7 @@ export default async function TeamPage({ params }: { params: Promise<{ teamId: s
         <div className="rounded-xl border bg-surface p-4 text-sm">
           <h2 className="font-semibold">팀원</h2>
           <ul className="mt-2 space-y-1">
-            {(members ?? []).map((m) => <li key={m.user_id}>{names[m.user_id]} · <span className="text-muted">{m.role}</span></li>)}
+            {(members ?? []).map((m) => <li key={m.user_id}>{names[m.user_id]} · <span className="text-muted">{m.role === "owner" ? "아이디어 제공자" : m.role}</span></li>)}
           </ul>
         </div>
         <div className="rounded-xl border bg-surface p-4 text-sm">

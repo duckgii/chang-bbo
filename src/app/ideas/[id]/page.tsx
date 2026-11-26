@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { AccessRequestForm, ApplyForm, CommentForm, DeleteCommentButton, LikeButton } from "./forms";
+import { ApplyForm, CommentForm, DeleteCommentButton, LikeButton, NdaAgreeForm, type NdaItem } from "./forms";
 
 type Role = { role: string; skills: string[] };
 
@@ -14,19 +14,15 @@ export default async function IdeaDetailPage({ params }: { params: Promise<{ id:
   if (!idea) notFound();
 
   const isOwner = idea.owner_id === user?.id;
-  const { data: request } = await supabase
-    .from("access_requests")
-    .select("status, expires_at")
-    .eq("idea_id", id)
-    .eq("requester_id", user?.id)
-    .maybeSingle();
-
-  // 상세 영역은 get_idea_detail()로만 읽는다. 권한이 없으면 오류, 있으면 열람 기록이 남는다.
-  const canView = isOwner || request?.status === "approved";
-  const { data: detailRows } = canView ? await supabase.rpc("get_idea_detail", { p_idea_id: id }) : { data: null };
+  // 상세 영역은 get_idea_detail()로만 읽는다. 권한(작성자·비밀유지 동의·팀원)이 없으면 오류, 있으면 열람 기록이 남는다.
+  const { data: detailRows } = await supabase.rpc("get_idea_detail", { p_idea_id: id });
   const detail = detailRows?.[0] as { solution: string; business_model: string | null; differentiation: string | null } | undefined;
 
-  const { data: nda } = await supabase.from("nda_versions").select("id, body").order("id", { ascending: false }).limit(1).single();
+  const [{ data: nda }, { data: myAgreement }] = await Promise.all([
+    supabase.from("nda_versions").select("id, title, items").order("id", { ascending: false }).limit(1).single(),
+    supabase.from("nda_agreements").select("agreed_at, nda_version_id")
+      .eq("idea_id", id).eq("user_id", user?.id).order("id", { ascending: false }).limit(1).maybeSingle(),
+  ]);
   const { data: application } = await supabase
     .from("applications").select("status").eq("idea_id", id).eq("applicant_id", user?.id).maybeSingle();
 
@@ -35,12 +31,14 @@ export default async function IdeaDetailPage({ params }: { params: Promise<{ id:
     supabase.from("idea_likes").select("user_id").eq("idea_id", id).eq("user_id", user?.id).maybeSingle(),
     supabase
       .from("idea_comments")
-      .select("id, body, created_at, author_id, author:profiles(display_name)")
+      .select("id, body, created_at, author_id, author:profiles(display_name, school:schools(name))")
       .eq("idea_id", id)
       .order("id"),
   ]);
-  const authorName = (a: unknown) =>
-    ((Array.isArray(a) ? a[0] : a) as { display_name?: string } | null)?.display_name || "이름 미등록";
+  type Author = { display_name?: string; school?: { name: string } | { name: string }[] | null } | null;
+  const first = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? v[0] ?? null : v ?? null);
+  const authorName = (a: unknown) => first(a as Author | Author[])?.display_name || "이름 미등록";
+  const authorSchool = (a: unknown) => first(first(a as Author | Author[])?.school)?.name;
 
   return (
     <article className="space-y-6">
@@ -83,14 +81,15 @@ export default async function IdeaDetailPage({ params }: { params: Promise<{ id:
             <div><dt className="font-medium">해결 방식</dt><dd className="mt-1 whitespace-pre-wrap">{detail.solution}</dd></div>
             <div><dt className="font-medium">수익 모델</dt><dd className="mt-1 whitespace-pre-wrap">{detail.business_model ?? "미정"}</dd></div>
             <div><dt className="font-medium">차별점</dt><dd className="mt-1 whitespace-pre-wrap">{detail.differentiation ?? "-"}</dd></div>
-            {!isOwner && <p className="text-xs text-subtle">이 열람은 기록되며 작성자가 확인할 수 있어요.</p>}
+            {!isOwner && (
+              <p className="text-xs text-subtle">
+                {myAgreement && `${new Date(myAgreement.agreed_at).toLocaleString("ko-KR")}에 비밀유지에 동의했어요 (v${myAgreement.nda_version_id}). `}
+                이 열람은 기록되며 작성자가 확인할 수 있어요.
+              </p>
+            )}
           </dl>
-        ) : request?.status === "pending" ? (
-          <p className="mt-3 text-sm">열람 신청을 보냈어요. 작성자가 승인하면 볼 수 있어요. (만료 {new Date(request.expires_at).toLocaleDateString("ko-KR")})</p>
-        ) : request?.status === "rejected" || request?.status === "expired" ? (
-          <p className="mt-3 text-sm text-muted">열람 신청이 승인되지 않았어요.</p>
-        ) : nda ? (
-          <AccessRequestForm ideaId={id} ndaId={nda.id} ndaBody={nda.body} />
+        ) : nda?.items ? (
+          <NdaAgreeForm ideaId={id} ndaId={nda.id} title={nda.title ?? "비밀유지 동의"} items={nda.items as NdaItem[]} />
         ) : null}
       </section>
 
@@ -112,6 +111,7 @@ export default async function IdeaDetailPage({ params }: { params: Promise<{ id:
             <li key={c.id} className="py-3">
               <div className="flex items-center gap-2 text-xs text-subtle">
                 <span className="font-medium text-fg">{authorName(c.author)}</span>
+                {authorSchool(c.author) && <span className="text-subtle">{authorSchool(c.author)} 인증</span>}
                 {c.author_id === idea.owner_id && <span className="rounded bg-surface-2 px-1.5 py-0.5">작성자</span>}
                 <span>{new Date(c.created_at).toLocaleString("ko-KR")}</span>
                 {(c.author_id === user?.id || isOwner) && (

@@ -62,7 +62,7 @@ export function SimilarIdeasDialog({ checkId, matches, onRegisterAnyway, onRevis
 
         {others.length > 0 && (
           <div className="mt-4 space-y-2">
-            <p className="text-sm font-medium">같은 학교의 다른 아이디어</p>
+            <p className="text-sm font-medium">다른 사람의 아이디어</p>
             {others.map((m) => (
               <div key={m.idea_id} className="rounded-lg border p-3 text-sm">
                 <Link href={`/ideas/${m.idea_id}`} target="_blank" className="font-medium underline">{m.title}</Link>

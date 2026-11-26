@@ -107,25 +107,21 @@ export async function deleteComment(ideaId: string, commentId: number): Promise<
   return {};
 }
 
-export async function requestAccess(ideaId: string, ndaVersionId: number): Promise<Result> {
+// 비밀유지 항목에 모두 동의하면 바로 상세 열람 (agree_nda가 최신 버전·전체 항목 동의를 확인하고 기록)
+export async function agreeNda(ideaId: string, ndaVersionId: number, agreedItems: number): Promise<Result> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const { error } = await supabase.from("access_requests").insert({
-    idea_id: ideaId,
-    requester_id: user?.id,
-    nda_version_id: ndaVersionId,
-    nda_agreed_at: new Date().toISOString(),
+  const { error } = await supabase.rpc("agree_nda", {
+    p_idea_id: ideaId,
+    p_nda_version_id: ndaVersionId,
+    p_agreed_items: agreedItems,
   });
-  if (error) return { error: error.code === "23505" ? "이미 신청했어요." : error.message };
+  if (error) {
+    if (error.message.includes("outdated")) return { error: "동의 문구가 바뀌었어요. 새로고침 후 다시 확인해 주세요." };
+    if (error.message.includes("all items")) return { error: "모든 항목에 동의해야 열람할 수 있어요." };
+    return { error: error.message };
+  }
   revalidatePath(`/ideas/${ideaId}`);
   return {};
-}
-
-export async function decideAccess(requestId: string, approve: boolean): Promise<Result> {
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("decide_access", { p_request_id: requestId, p_approve: approve });
-  revalidatePath("/me");
-  return error ? { error: error.message } : {};
 }
 
 export async function applyToIdea(ideaId: string, role: string, message: string): Promise<Result> {

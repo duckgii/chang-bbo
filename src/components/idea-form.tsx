@@ -112,7 +112,7 @@ export function IdeaFormPanel({ heading, initial = EMPTY_IDEA, aiFields = [], dr
       </fieldset>
 
       <fieldset className="space-y-3">
-        <legend className="text-xs font-semibold uppercase text-muted">상세 영역 · 승인 + 비밀유지 동의 후 열람</legend>
+        <legend className="text-xs font-semibold uppercase text-muted">상세 영역 · 비밀유지 항목에 동의한 사람만 열람 (기록이 남아요)</legend>
         {field(FIELD_LABELS.solution, "solution", "detail.solution", LIMITS.solution, 5)}
         {field(FIELD_LABELS.business_model, "business_model", "detail.business_model", LIMITS.business_model, 3, "아직 없으면 비워둬도 돼요")}
         {field(FIELD_LABELS.differentiation, "differentiation", "detail.differentiation", LIMITS.differentiation, 3)}

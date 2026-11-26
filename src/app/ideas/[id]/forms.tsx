@@ -1,25 +1,50 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addComment, applyToIdea, deleteComment, requestAccess, toggleLike } from "@/app/actions";
+import { addComment, agreeNda, applyToIdea, deleteComment, toggleLike } from "@/app/actions";
 
-export function AccessRequestForm({ ideaId, ndaId, ndaBody }: { ideaId: string; ndaId: number; ndaBody: string }) {
-  const [agreed, setAgreed] = useState(false);
+export type NdaItem = { title: string; body: string };
+
+// 비밀유지 항목별 동의 → 모두 체크하면 바로 상세 열람
+export function NdaAgreeForm({ ideaId, ndaId, title, items }: { ideaId: string; ndaId: number; title: string; items: NdaItem[] }) {
+  const [checked, setChecked] = useState<boolean[]>(() => items.map(() => false));
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const all = checked.every(Boolean);
+
   return (
     <div className="mt-3 space-y-3 text-sm">
-      <p>해결 방식, 수익 모델, 차별점은 작성자의 승인과 비밀유지 동의 후 볼 수 있어요.</p>
-      <div className="max-h-40 overflow-y-auto rounded bg-surface-2 p-3 text-xs text-muted">{ndaBody}</div>
-      <label className="flex items-center gap-2">
-        <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
-        위 비밀유지 내용에 동의합니다 (동의 시각이 기록돼요)
-      </label>
-      <button disabled={!agreed || pending}
-        onClick={() => start(async () => { const r = await requestAccess(ideaId, ndaId); if (r.error) setError(r.error); })}
-        className="rounded bg-primary px-4 py-2 text-primary-fg disabled:opacity-40">
-        상세 열람 신청
-      </button>
+      <p>
+        해결 방식, 수익 모델, 차별점은 <b>아래 비밀유지 항목에 모두 동의하면 바로</b> 볼 수 있어요.
+        동의와 열람 기록은 작성자에게 공개돼요.
+      </p>
+      <div className="rounded-lg border">
+        <p className="border-b px-3 py-2 font-medium">{title}</p>
+        <ol className="divide-y">
+          {items.map((it, i) => (
+            <li key={it.title}>
+              <label className="flex cursor-pointer gap-3 px-3 py-2.5 hover:bg-surface-2">
+                <input type="checkbox" className="mt-1 shrink-0" checked={checked[i]}
+                  onChange={(e) => setChecked((c) => c.map((v, j) => (j === i ? e.target.checked : v)))} />
+                <span>
+                  <span className="font-medium">{i + 1}. {it.title}</span>
+                  <span className="mt-0.5 block text-muted">{it.body}</span>
+                </span>
+              </label>
+            </li>
+          ))}
+        </ol>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" onClick={() => setChecked(items.map(() => !all))} className="text-muted underline">
+          {all ? "전체 해제" : "전체 동의"}
+        </button>
+        <button disabled={!all || pending}
+          onClick={() => start(async () => { const r = await agreeNda(ideaId, ndaId, items.length); setError(r.error ?? null); })}
+          className="rounded bg-primary px-4 py-2 text-primary-fg disabled:opacity-40">
+          {pending ? "기록 중…" : `${checked.filter(Boolean).length}/${items.length} 동의하고 상세 내용 보기`}
+        </button>
+      </div>
       {error && <p className="text-danger">{error}</p>}
     </div>
   );
@@ -78,7 +103,7 @@ export function CommentForm({ ideaId }: { ideaId: string }) {
       <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} maxLength={1000}
         placeholder="의견이나 질문을 남겨주세요" className="w-full rounded border px-3 py-2" />
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-subtle">댓글은 같은 학교 누구나 볼 수 있어요. 상세 영역 내용은 쓰지 마세요.</p>
+        <p className="text-xs text-subtle">댓글은 로그인한 누구나 볼 수 있어요. 상세 영역 내용은 쓰지 마세요.</p>
         <button disabled={pending || !body.trim()}
           onClick={() => start(async () => {
             const r = await addComment(ideaId, body);

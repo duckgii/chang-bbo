@@ -14,7 +14,7 @@ const Judgement = z.object({
 
 type Candidate = { id: string; title: string; problem: string; is_mine: boolean; score: number };
 
-// 등록 전 비슷한 아이디어 확인. 같은 학교에서 볼 수 있는 아이디어의 공개 영역(제목·문제 정의)만 비교한다.
+// 등록 전 비슷한 아이디어 확인. 볼 수 있는 아이디어의 공개 영역(제목·문제 정의)만 비교한다.
 // 다른 사람의 상세 영역은 조회하지도, AI에 보내지도 않는다.
 export async function POST(req: Request) {
   const supabase = await createClient();

@@ -15,7 +15,7 @@ envval  = $$(grep -E '^$(1)=' $(ENV_FILE) | cut -d= -f2- | tr -d '"')
 
 .DEFAULT_GOAL := all
 .PHONY: all deps app prod stop clean fclean re help env logs \
-	    db-start db-stop db-reset db-status db-migration lint typecheck check
+	    db-start db-restart db-stop db-reset db-status db-migration lint typecheck check
 
 ## ── 기본 ──
 all: deps $(ENV_FILE) db-start env app ## ★ 전부 켜기 (패키지 설치만 캐시, 코드 빌드는 항상 새로)
@@ -70,8 +70,12 @@ logs: ## 앱 로그 보기
 	$(COMPOSE) --profile dev --profile prod logs -f
 
 ## ── 로컬 DB (Supabase CLI) ──
-db-start: ## 로컬 Supabase 시작 (이미 켜져 있으면 그대로)
-	$(SUPABASE) start
+db-start: ## 로컬 Supabase 시작 (이미 켜져 있으면 그대로). 구글 로그인 키는 .env.local에서 읽음
+	@set -a; [ -f $(ENV_FILE) ] && . ./$(ENV_FILE); set +a; $(SUPABASE) start
+
+db-restart: ## 로컬 Supabase 재시작 (config.toml·구글 키 변경 반영, 데이터 유지)
+	-$(SUPABASE) stop
+	@set -a; [ -f $(ENV_FILE) ] && . ./$(ENV_FILE); set +a; $(SUPABASE) start
 
 db-stop: ## 로컬 Supabase 끄기 (데이터 유지)
 	$(SUPABASE) stop

@@ -1,25 +1,27 @@
 import Link from "next/link";
-import { decideAccess, decideApplication, updateProfile } from "@/app/actions";
+import { decideApplication, updateProfile } from "@/app/actions";
 import { createClient } from "@/lib/supabase/server";
 
-const STATUS_KO: Record<string, string> = { pending: "대기", approved: "승인", rejected: "거절", expired: "만료", accepted: "수락" };
+const STATUS_KO: Record<string, string> = { pending: "대기", rejected: "거절", accepted: "수락" };
 
 export default async function MyPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const [{ data: profile }, { data: myIdeas }, { data: myRequests }, { data: myApps }] = await Promise.all([
-    supabase.from("profiles").select("*").eq("id", user!.id).single(),
+    supabase.from("profiles").select("*, school:schools(name)").eq("id", user!.id).single(),
     supabase.from("ideas").select("id, title, created_at").eq("owner_id", user!.id).order("created_at", { ascending: false }),
-    supabase.from("access_requests").select("id, status, ideas(id, title)").eq("requester_id", user!.id),
+    supabase.from("nda_agreements").select("id, agreed_at, ideas(id, title)").eq("user_id", user!.id)
+      .order("agreed_at", { ascending: false }),
     supabase.from("applications").select("id, status, role, ideas(id, title)").eq("applicant_id", user!.id),
   ]);
   // 빈 배열로 in() 조회하면 PostgREST가 오류를 내므로, 없는 UUID로 대체해 빈 결과를 받는다.
   const ideaIds = myIdeas?.length ? myIdeas.map((i) => i.id) : ["00000000-0000-0000-0000-000000000000"];
 
-  // 내 아이디어로 들어온 신청·지원·열람 기록 (RLS가 작성자에게만 보여줌)
-  const [{ data: incomingReq }, { data: incomingApps }, { data: views }] = await Promise.all([
-    supabase.from("access_requests").select("id, idea_id, status, nda_agreed_at, requester:profiles(display_name)")
-      .in("idea_id", ideaIds).eq("status", "pending"),
+  // 내 아이디어에 대한 비밀유지 동의·지원·열람 기록 (RLS가 작성자에게만 보여줌)
+  const [{ data: agreements }, { data: incomingApps }, { data: views }] = await Promise.all([
+    supabase.from("nda_agreements")
+      .select("id, idea_id, agreed_at, nda_version_id, user:profiles(display_name, school:schools(name))")
+      .in("idea_id", ideaIds).order("agreed_at", { ascending: false }).limit(30),
     supabase.from("applications").select("id, idea_id, role, message, applicant:profiles(display_name, stack, github_url)")
       .in("idea_id", ideaIds).eq("status", "pending"),
     supabase.from("view_logs").select("id, idea_id, viewed_at, viewer:profiles(display_name)")
@@ -40,23 +42,34 @@ export default async function MyPage() {
           <input name="github_url" defaultValue={profile?.github_url ?? ""} placeholder="GitHub URL" className="rounded border px-3 py-2" />
           <button className="rounded bg-primary py-2 text-primary-fg sm:col-span-3">저장</button>
         </form>
-        <p className="mt-2 text-xs text-muted">{user?.email} · 학교 이메일 인증됨</p>
+        <p className="mt-2 text-xs text-muted">
+          {user?.email} ·{" "}
+          {one(profile?.school as { name: string } | { name: string }[] | null)?.name
+            ? `${one(profile?.school as { name: string } | { name: string }[] | null)?.name} 인증`
+            : "학교 인증 없음 (학교 메일 계정으로 로그인하면 표시돼요)"}
+        </p>
       </section>
 
       <section className="rounded-xl border bg-surface p-5">
-        <h2 className="font-semibold">받은 열람 신청</h2>
+        <h2 className="font-semibold">내 아이디어 비밀유지 동의 기록</h2>
+        <p className="mt-1 text-xs text-muted">상세 내용을 보려면 비밀유지 항목에 모두 동의해야 해요. 누가 언제 어떤 버전에 동의했는지 남아요.</p>
         <ul className="mt-3 divide-y text-sm">
-          {(incomingReq ?? []).map((r) => (
-            <li key={r.id} className="flex flex-wrap items-center gap-2 py-2">
-              <span className="flex-1">
-                <b>{one(r.requester)?.display_name || "이름 미등록"}</b> → {titleOf(r.idea_id)}
-                <span className="ml-2 text-xs text-subtle">비밀유지 동의 {new Date(r.nda_agreed_at).toLocaleString("ko-KR")}</span>
-              </span>
-              <form action={async () => { "use server"; await decideAccess(r.id, true); }}><button className="rounded bg-primary px-3 py-1 text-primary-fg">승인</button></form>
-              <form action={async () => { "use server"; await decideAccess(r.id, false); }}><button className="rounded border px-3 py-1">거절</button></form>
-            </li>
-          ))}
-          {!incomingReq?.length && <li className="py-2 text-muted">새 신청이 없어요.</li>}
+          {(agreements ?? []).map((a) => {
+            type U = { display_name: string; school: { name: string } | { name: string }[] | null };
+            const u = one(a.user as unknown as U | U[] | null);
+            const school = one(u?.school ?? null)?.name;
+            return (
+              <li key={a.id} className="flex flex-wrap items-center gap-x-2 py-2">
+                <b>{u?.display_name || "이름 미등록"}</b>
+                {school && <span className="text-xs text-subtle">{school} 인증</span>}
+                <span>→ {titleOf(a.idea_id)}</span>
+                <span className="ml-auto text-xs text-subtle">
+                  {new Date(a.agreed_at).toLocaleString("ko-KR")} · 동의서 v{a.nda_version_id}
+                </span>
+              </li>
+            );
+          })}
+          {!agreements?.length && <li className="py-2 text-muted">아직 동의한 사람이 없어요.</li>}
         </ul>
       </section>
 
@@ -108,10 +121,10 @@ export default async function MyPage() {
           </ul>
         </section>
         <section className="rounded-xl border bg-surface p-5">
-          <h2 className="font-semibold">내 신청·지원 현황</h2>
+          <h2 className="font-semibold">내 동의·지원 현황</h2>
           <ul className="mt-3 space-y-1 text-sm">
-            {(myRequests ?? []).map((r) => { const i = one(r.ideas); return i && (
-              <li key={r.id}>열람 · <Link href={`/ideas/${i.id}`} className="underline">{i.title}</Link> · {STATUS_KO[r.status]}</li>); })}
+            {(myRequests ?? []).map((r) => { const i = one(r.ideas as { id: string; title: string } | { id: string; title: string }[] | null); return i && (
+              <li key={r.id}>비밀유지 동의 · <Link href={`/ideas/${i.id}`} className="underline">{i.title}</Link> · {new Date(r.agreed_at).toLocaleDateString("ko-KR")}</li>); })}
             {(myApps ?? []).map((a) => { const i = one(a.ideas); return i && (
               <li key={a.id}>지원({a.role}) · <Link href={`/ideas/${i.id}`} className="underline">{i.title}</Link> · {STATUS_KO[a.status]}</li>); })}
           </ul>
