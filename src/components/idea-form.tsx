@@ -74,7 +74,7 @@ export function IdeaFormPanel({ heading, initial = EMPTY_IDEA, aiFields = [], dr
       <label className="block">
         <span className="text-sm font-medium">{label}{badge(key)}</span>
         {hint && <span className="block text-xs text-muted">{hint}</span>}
-        <textarea {...form.register(name)} rows={rows} className="mt-1 w-full rounded border px-3 py-2 text-sm" />
+        <textarea {...form.register(name)} id={`field-${key}`} rows={rows} className="mt-1 w-full scroll-mt-24 rounded border px-3 py-2 text-sm" />
         <span className={`block text-right text-xs ${e ? "text-danger" : "text-subtle"}`}>
           {e?.message ? `${e.message} · ` : ""}{String(form.watch(name) ?? "").length}/{max}
         </span>

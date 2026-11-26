@@ -7,7 +7,12 @@ import { createClient } from "@/lib/supabase/server";
 
 type Result = { error?: string };
 
-export async function submitIdea(input: unknown, aiFields: string[], sessionId: string | null): Promise<Result> {
+export async function submitIdea(
+  input: unknown,
+  aiFields: string[],
+  sessionId: string | null,
+  similarCheckId: string | null = null,
+): Promise<Result> {
   const parsed = IdeaForm.safeParse(input);
   if (!parsed.success) return { error: "양식을 다시 확인해주세요." };
   const supabase = await createClient();
@@ -20,7 +25,24 @@ export async function submitIdea(input: unknown, aiFields: string[], sessionId: 
   if (sessionId) {
     await supabase.from("ai_sessions").update({ idea_id: ideaId, status: "closed" }).eq("id", sessionId);
   }
+  if (similarCheckId) {
+    // 비슷한 아이디어를 안내받고도 등록했다는 기록 (분쟁 판단 근거)
+    await supabase
+      .from("similar_idea_checks")
+      .update({ decision: "registered", idea_id: ideaId, decided_at: new Date().toISOString() })
+      .eq("id", similarCheckId);
+  }
   redirect(`/ideas/${ideaId}`);
+}
+
+// 비슷한 아이디어 안내에서 '합류 지원' 또는 '차별점 보완'을 고른 경우 기록
+export async function recordSimilarDecision(checkId: string, decision: "joined" | "revised"): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("similar_idea_checks")
+    .update({ decision, decided_at: new Date().toISOString() })
+    .eq("id", checkId);
+  return error ? { error: error.message } : {};
 }
 
 // 내 아이디어 수정: submit_idea가 작성자 확인 + 새 버전 해시 기록까지 처리한다.

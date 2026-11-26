@@ -5,7 +5,8 @@ import { submitIdea } from "@/app/actions";
 import type { ConsultTurn } from "@/lib/ai/consult-schema";
 import { createClient } from "@/lib/supabase/client";
 import { EMPTY_IDEA, IdeaFormPanel, type DraftInfo } from "@/components/idea-form";
-import { CATEGORIES, type IdeaDraft } from "@/lib/idea-schema";
+import { SimilarIdeasDialog, type SimilarMatch } from "@/components/similar-ideas";
+import { CATEGORIES, type IdeaDraft, type IdeaFormValues } from "@/lib/idea-schema";
 
 type ChatMsg =
   | { role: "user"; content: string }
@@ -33,6 +34,7 @@ export default function NewIdeaPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftInfo | null>(null);
   const [formKey, setFormKey] = useState(0); // 새 아이디어 시작 시 양식을 비우기 위해 다시 마운트
+  const [similar, setSimilar] = useState<{ checkId: string | null; matches: SimilarMatch[]; values: IdeaFormValues } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const last = chat[chat.length - 1];
@@ -151,8 +153,47 @@ export default function NewIdeaPage() {
     }
   }
 
+  // 등록 전에 같은 학교의 비슷한 아이디어를 확인. 있으면 안내창을 띄우고, 없거나 확인에 실패하면 바로 등록.
+  async function handleSubmit(values: IdeaFormValues) {
+    try {
+      const res = await fetch("/api/similar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values.public),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { checkId: string | null; matches: SimilarMatch[] };
+        if (data.matches.length) {
+          setSimilar({ ...data, values });
+          return;
+        }
+      }
+    } catch {
+      // 비슷한 아이디어 확인은 보조 기능이라 실패해도 등록은 진행
+    }
+    return submitIdea(values, draft?.aiFields ?? [], sessionId);
+  }
+
+  function reviseDifferentiation() {
+    setSimilar(null);
+    setTimeout(() => {
+      const el = document.getElementById("field-differentiation");
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      el?.focus();
+    }, 50);
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-2">
+      {similar && (
+        <SimilarIdeasDialog
+          checkId={similar.checkId}
+          matches={similar.matches}
+          onRegisterAnyway={() => submitIdea(similar.values, draft?.aiFields ?? [], sessionId, similar.checkId)}
+          onRevise={reviseDifferentiation}
+          onClose={() => setSimilar(null)}
+        />
+      )}
       {/* 왼쪽: AI 상담 */}
       <section className="flex h-[75vh] flex-col rounded-xl border bg-surface">
         <div className="border-b px-4 py-3">
@@ -242,7 +283,7 @@ export default function NewIdeaPage() {
         heading="아이디어 등록"
         draft={draft}
         submitLabel="등록하기 (등록 시점이 타임스탬프로 기록돼요)"
-        onSubmit={(values) => submitIdea(values, draft?.aiFields ?? [], sessionId)}
+        onSubmit={handleSubmit}
       />
     </div>
   );
