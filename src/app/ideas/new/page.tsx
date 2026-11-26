@@ -1,12 +1,11 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useRef, useState, useTransition } from "react";
-import { useFieldArray, useForm } from "react-hook-form";
+import { useEffect, useRef, useState } from "react";
 import { submitIdea } from "@/app/actions";
 import type { ConsultTurn } from "@/lib/ai/consult-schema";
 import { createClient } from "@/lib/supabase/client";
-import { CATEGORIES, FIELD_LABELS, IdeaForm, LIMITS, type IdeaDraft, type IdeaFormValues } from "@/lib/idea-schema";
+import { EMPTY_IDEA, IdeaFormPanel, type DraftInfo } from "@/components/idea-form";
+import { CATEGORIES, type IdeaDraft } from "@/lib/idea-schema";
 
 type ChatMsg =
   | { role: "user"; content: string }
@@ -15,13 +14,6 @@ type ChatMsg =
 const FIELD_STEP: Record<string, string> = {
   problem: "문제 정의", target_users: "타깃 사용자", solution: "해결 방식", business_model: "수익 모델",
   differentiation: "차별점", needed_roles: "필요한 역할", provider_offers: "내가 제공할 것", wrapup: "마무리",
-};
-
-const EMPTY: IdeaFormValues = {
-  public: { title: "", problem: "", target_users: "", category: "기타" },
-  detail: { solution: "", business_model: null, differentiation: null },
-  needed_roles: [{ role: "", skills: [] }],
-  provider_offers: [],
 };
 
 const GREETING: ChatMsg = {
@@ -39,18 +31,9 @@ export default function NewIdeaPage() {
   const [loading, setLoading] = useState(false);
   const [drafting, setDrafting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [aiFields, setAiFields] = useState<string[]>([]);
-  const [missing, setMissing] = useState<string[]>([]);
-  const [followups, setFollowups] = useState<string[]>([]);
-  const [risks, setRisks] = useState<string[]>([]);
+  const [draft, setDraft] = useState<DraftInfo | null>(null);
+  const [formKey, setFormKey] = useState(0); // 새 아이디어 시작 시 양식을 비우기 위해 다시 마운트
   const bottomRef = useRef<HTMLDivElement>(null);
-
-  // ── 등록 양식 ──
-  const form = useForm<IdeaFormValues>({ resolver: zodResolver(IdeaForm), defaultValues: EMPTY });
-  const roles = useFieldArray({ control: form.control, name: "needed_roles" });
-  const [offersText, setOffersText] = useState("");
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitting, startSubmit] = useTransition();
 
   const last = chat[chat.length - 1];
   const currentTurn = last.role === "assistant" ? last.turn : undefined;
@@ -84,12 +67,8 @@ export default function NewIdeaPage() {
     setSelected([]);
     setInput("");
     setNotice(null);
-    setAiFields([]);
-    setMissing([]);
-    setFollowups([]);
-    setRisks([]);
-    form.reset(EMPTY);
-    setOffersText("");
+    setDraft(null);
+    setFormKey((k) => k + 1);
   }
 
   // picks: AI 후보에서 고른 답, typed: 직접 입력한 답 (서버가 둘을 구분해 기록)
@@ -155,56 +134,22 @@ export default function NewIdeaPage() {
       }
       const d = (await res.json()) as IdeaDraft;
       const cat = (CATEGORIES as readonly string[]).includes(d.public.category) ? d.public.category : "기타";
-      form.reset({
-        public: { ...d.public, category: cat },
-        detail: d.detail,
-        needed_roles: d.needed_roles.length ? d.needed_roles : EMPTY.needed_roles,
-        provider_offers: d.provider_offers,
+      setDraft({
+        values: {
+          public: { ...d.public, category: cat },
+          detail: d.detail,
+          needed_roles: d.needed_roles.length ? d.needed_roles : EMPTY_IDEA.needed_roles,
+          provider_offers: d.provider_offers,
+        },
+        aiFields: d.ai_suggested_fields,
+        missing: d.missing_fields,
+        followups: d.followup_questions,
+        risks: d.risks,
       });
-      setOffersText(d.provider_offers.join(", "));
-      setAiFields(d.ai_suggested_fields);
-      setMissing(d.missing_fields);
-      setFollowups(d.followup_questions);
-      setRisks(d.risks);
-      void form.trigger(); // 글자 수 초과 등을 바로 표시
     } finally {
       setDrafting(false);
     }
   }
-
-  function onSubmit(values: IdeaFormValues) {
-    setSubmitError(null);
-    const payload = {
-      ...values,
-      provider_offers: offersText.split(",").map((s) => s.trim()).filter(Boolean),
-      needed_roles: values.needed_roles.filter((r) => r.role.trim()),
-    };
-    startSubmit(async () => {
-      const r = await submitIdea(payload, aiFields, sessionId);
-      if (r?.error) setSubmitError(r.error);
-    });
-  }
-
-  const badge = (key: string) =>
-    aiFields.includes(key) ? (
-      <span className="ml-2 rounded bg-ai-bg px-1.5 py-0.5 text-xs text-ai-fg">AI 제안 · 확인 필요</span>
-    ) : missing.includes(key) ? (
-      <span className="ml-2 rounded bg-warn-bg px-1.5 py-0.5 text-xs text-warn-fg">상담에서 안 다룸</span>
-    ) : null;
-
-  const field = (label: string, key: string, name: Parameters<typeof form.register>[0], max: number, rows = 3, hint?: string) => {
-    const e = form.getFieldState(name, form.formState).error;
-    return (
-      <label className="block">
-        <span className="text-sm font-medium">{label}{badge(key)}</span>
-        {hint && <span className="block text-xs text-muted">{hint}</span>}
-        <textarea {...form.register(name)} rows={rows} className="mt-1 w-full rounded border px-3 py-2 text-sm" />
-        <span className={`block text-right text-xs ${e ? "text-danger" : "text-subtle"}`}>
-          {e?.message ? `${e.message} · ` : ""}{String(form.watch(name) ?? "").length}/{max}
-        </span>
-      </label>
-    );
-  };
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -292,65 +237,13 @@ export default function NewIdeaPage() {
       </section>
 
       {/* 오른쪽: 등록 양식 */}
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 rounded-xl border bg-surface p-5">
-        <h2 className="font-semibold">아이디어 등록</h2>
-        {risks.length > 0 && (
-          <div className="rounded bg-surface-2 p-3 text-sm">
-            <p className="font-medium">출시 전에 확인해 볼 점</p>
-            <ol className="mt-1 list-decimal space-y-1 pl-5 text-muted">{risks.map((r) => <li key={r}>{r}</li>)}</ol>
-          </div>
-        )}
-        {followups.length > 0 && (
-          <div className="rounded bg-warn-bg p-3 text-sm">
-            <p className="font-medium text-warn-fg">더 채우면 좋은 부분</p>
-            <ul className="mt-1 list-disc pl-5 text-warn-fg">{followups.map((q) => <li key={q}>{q}</li>)}</ul>
-          </div>
-        )}
-
-        <fieldset className="space-y-3">
-          <legend className="text-xs font-semibold uppercase text-muted">공개 영역 · 목록에 보여요</legend>
-          {field(FIELD_LABELS.title, "title", "public.title", LIMITS.title, 1)}
-          {field(FIELD_LABELS.problem, "problem", "public.problem", LIMITS.problem)}
-          {field(FIELD_LABELS.target_users, "target_users", "public.target_users", LIMITS.target_users, 2)}
-          <label className="block">
-            <span className="text-sm font-medium">{FIELD_LABELS.category}</span>
-            <select {...form.register("public.category")} className="mt-1 w-full rounded border px-3 py-2 text-sm">
-              {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-            </select>
-          </label>
-        </fieldset>
-
-        <fieldset className="space-y-3">
-          <legend className="text-xs font-semibold uppercase text-muted">상세 영역 · 승인 + 비밀유지 동의 후 열람</legend>
-          {field(FIELD_LABELS.solution, "solution", "detail.solution", LIMITS.solution, 5)}
-          {field(FIELD_LABELS.business_model, "business_model", "detail.business_model", LIMITS.business_model, 3, "아직 없으면 비워둬도 돼요")}
-          {field(FIELD_LABELS.differentiation, "differentiation", "detail.differentiation", LIMITS.differentiation, 3)}
-        </fieldset>
-
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium">{FIELD_LABELS.needed_roles}{badge("needed_roles")}</legend>
-          {roles.fields.map((f, i) => (
-            <div key={f.id} className="flex gap-2">
-              <input {...form.register(`needed_roles.${i}.role`)} placeholder="예: 프론트엔드" className="flex-1 rounded border px-3 py-2 text-sm" />
-              <button type="button" onClick={() => roles.remove(i)} className="px-2 text-subtle">✕</button>
-            </div>
-          ))}
-          <button type="button" onClick={() => roles.append({ role: "", skills: [] })} className="text-sm text-muted underline">
-            + 역할 추가
-          </button>
-        </fieldset>
-
-        <label className="block">
-          <span className="text-sm font-medium">{FIELD_LABELS.provider_offers}{badge("provider_offers")}</span>
-          <span className="block text-xs text-muted">쉼표로 구분 · 예: 도메인 지식, 고객 인터뷰 섭외, 기획</span>
-          <input value={offersText} onChange={(e) => setOffersText(e.target.value)} className="mt-1 w-full rounded border px-3 py-2 text-sm" />
-        </label>
-
-        {submitError && <p className="text-sm text-danger">{submitError}</p>}
-        <button disabled={submitting} className="w-full rounded bg-primary py-2.5 text-primary-fg disabled:opacity-50">
-          {submitting ? "등록 중…" : "등록하기 (등록 시점이 타임스탬프로 기록돼요)"}
-        </button>
-      </form>
+      <IdeaFormPanel
+        key={formKey}
+        heading="아이디어 등록"
+        draft={draft}
+        submitLabel="등록하기 (등록 시점이 타임스탬프로 기록돼요)"
+        onSubmit={(values) => submitIdea(values, draft?.aiFields ?? [], sessionId)}
+      />
     </div>
   );
 }

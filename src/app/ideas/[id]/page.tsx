@@ -1,6 +1,7 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { AccessRequestForm, ApplyForm } from "./forms";
+import { AccessRequestForm, ApplyForm, CommentForm, DeleteCommentButton, LikeButton } from "./forms";
 
 type Role = { role: string; skills: string[] };
 
@@ -29,12 +30,35 @@ export default async function IdeaDetailPage({ params }: { params: Promise<{ id:
   const { data: application } = await supabase
     .from("applications").select("status").eq("idea_id", id).eq("applicant_id", user?.id).maybeSingle();
 
+  const [{ count: likeCount }, { data: myLike }, { data: comments }] = await Promise.all([
+    supabase.from("idea_likes").select("user_id", { count: "exact", head: true }).eq("idea_id", id),
+    supabase.from("idea_likes").select("user_id").eq("idea_id", id).eq("user_id", user?.id).maybeSingle(),
+    supabase
+      .from("idea_comments")
+      .select("id, body, created_at, author_id, author:profiles(display_name)")
+      .eq("idea_id", id)
+      .order("id"),
+  ]);
+  const authorName = (a: unknown) =>
+    ((Array.isArray(a) ? a[0] : a) as { display_name?: string } | null)?.display_name || "이름 미등록";
+
   return (
     <article className="space-y-6">
       <header>
         <span className="text-sm text-muted">{idea.category}</span>
         <h1 className="mt-1 text-2xl font-bold">{idea.title}</h1>
-        <p className="mt-1 text-xs text-subtle">등록 {new Date(idea.created_at).toLocaleString("ko-KR")}</p>
+        <p className="mt-1 text-xs text-subtle">
+          등록 {new Date(idea.created_at).toLocaleString("ko-KR")}
+          {idea.updated_at !== idea.created_at && ` · 수정 ${new Date(idea.updated_at).toLocaleString("ko-KR")}`}
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <LikeButton ideaId={id} liked={!!myLike} count={likeCount ?? 0} disabled={isOwner} />
+          {isOwner && (
+            <Link href={`/ideas/${id}/edit`} className="rounded border px-3 py-1.5 text-sm hover:bg-surface-2">
+              수정하기
+            </Link>
+          )}
+        </div>
       </header>
 
       <section className="rounded-xl border bg-surface p-5">
@@ -80,6 +104,27 @@ export default async function IdeaDetailPage({ params }: { params: Promise<{ id:
           )}
         </section>
       )}
+
+      <section className="rounded-xl border bg-surface p-5">
+        <h2 className="text-sm font-semibold text-muted">댓글 {comments?.length ?? 0}</h2>
+        <ul className="mt-3 divide-y text-sm">
+          {(comments ?? []).map((c) => (
+            <li key={c.id} className="py-3">
+              <div className="flex items-center gap-2 text-xs text-subtle">
+                <span className="font-medium text-fg">{authorName(c.author)}</span>
+                {c.author_id === idea.owner_id && <span className="rounded bg-surface-2 px-1.5 py-0.5">작성자</span>}
+                <span>{new Date(c.created_at).toLocaleString("ko-KR")}</span>
+                {(c.author_id === user?.id || isOwner) && (
+                  <DeleteCommentButton ideaId={id} commentId={c.id} />
+                )}
+              </div>
+              <p className="mt-1 whitespace-pre-wrap">{c.body}</p>
+            </li>
+          ))}
+          {!comments?.length && <li className="py-2 text-muted">첫 댓글을 남겨보세요.</li>}
+        </ul>
+        <CommentForm ideaId={id} />
+      </section>
     </article>
   );
 }

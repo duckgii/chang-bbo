@@ -23,6 +23,68 @@ export async function submitIdea(input: unknown, aiFields: string[], sessionId: 
   redirect(`/ideas/${ideaId}`);
 }
 
+// 내 아이디어 수정: submit_idea가 작성자 확인 + 새 버전 해시 기록까지 처리한다.
+export async function updateIdea(ideaId: string, input: unknown): Promise<Result> {
+  const parsed = IdeaForm.safeParse(input);
+  if (!parsed.success) return { error: "양식을 다시 확인해주세요." };
+  const supabase = await createClient();
+
+  // 이전 버전의 AI 제안 표시는 이어간다 (사람이 고쳤는지 알 수 없으므로 보수적으로 유지)
+  const { data: prev } = await supabase
+    .from("idea_versions")
+    .select("ai_suggested_fields")
+    .eq("idea_id", ideaId)
+    .order("version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { error } = await supabase.rpc("submit_idea", {
+    p_idea_id: ideaId,
+    p: parsed.data,
+    p_ai_fields: prev?.ai_suggested_fields ?? [],
+  });
+  if (error) return { error: error.message.includes("forbidden") ? "내 아이디어만 수정할 수 있어요." : error.message };
+  revalidatePath(`/ideas/${ideaId}`);
+  revalidatePath("/ideas");
+  redirect(`/ideas/${ideaId}`);
+}
+
+export async function toggleLike(ideaId: string, liked: boolean): Promise<Result> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요해요." };
+  const { error } = liked
+    ? await supabase.from("idea_likes").delete().eq("idea_id", ideaId).eq("user_id", user.id)
+    : await supabase.from("idea_likes").insert({ idea_id: ideaId, user_id: user.id });
+  if (error && error.code !== "23505") {
+    return { error: error.code === "42501" ? "내 아이디어에는 좋아요를 누를 수 없어요." : error.message };
+  }
+  revalidatePath(`/ideas/${ideaId}`);
+  revalidatePath("/ideas");
+  return {};
+}
+
+export async function addComment(ideaId: string, body: string): Promise<Result> {
+  const text = body.trim();
+  if (!text || text.length > 1000) return { error: "댓글은 1~1000자로 써주세요." };
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요해요." };
+  const { error } = await supabase.from("idea_comments").insert({ idea_id: ideaId, author_id: user.id, body: text });
+  if (error) return { error: error.message };
+  revalidatePath(`/ideas/${ideaId}`);
+  return {};
+}
+
+export async function deleteComment(ideaId: string, commentId: number): Promise<Result> {
+  const supabase = await createClient();
+  const { error, count } = await supabase.from("idea_comments").delete({ count: "exact" }).eq("id", commentId);
+  if (error) return { error: error.message };
+  if (!count) return { error: "삭제할 수 없는 댓글이에요." };
+  revalidatePath(`/ideas/${ideaId}`);
+  return {};
+}
+
 export async function requestAccess(ideaId: string, ndaVersionId: number): Promise<Result> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

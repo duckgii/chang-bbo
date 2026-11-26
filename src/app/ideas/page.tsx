@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 
 type Role = { role: string; skills: string[] };
 
+// PostgREST의 embedded count는 [{ count: n }] 형태로 온다
+const countOf = (v: unknown) => (Array.isArray(v) ? ((v[0] as { count?: number })?.count ?? 0) : 0);
+
 export default async function IdeasPage({ searchParams }: { searchParams: Promise<{ category?: string; role?: string }> }) {
   const { category, role } = await searchParams;
   const supabase = await createClient();
@@ -11,7 +14,7 @@ export default async function IdeasPage({ searchParams }: { searchParams: Promis
   // 공개 영역만 조회. 상세 영역(idea_details)은 이 쿼리에 절대 포함하지 않는다.
   let q = supabase
     .from("ideas")
-    .select("id, title, problem, target_users, category, needed_roles, created_at")
+    .select("id, title, problem, target_users, category, needed_roles, created_at, idea_likes(count), idea_comments(count)")
     .eq("status", "open")
     .order("created_at", { ascending: false })
     .limit(50);
@@ -48,6 +51,9 @@ export default async function IdeasPage({ searchParams }: { searchParams: Promis
                   <span key={r.role} className="rounded bg-surface-2 px-2 py-0.5 text-xs">{r.role}</span>
                 ))}
               </div>
+              <p className="mt-3 text-xs text-subtle">
+                ♥ {countOf(i.idea_likes)} · 댓글 {countOf(i.idea_comments)}
+              </p>
             </Link>
           </li>
         ))}

@@ -98,7 +98,12 @@ export default async function MyPage() {
         <section className="rounded-xl border bg-surface p-5">
           <h2 className="font-semibold">내가 등록한 아이디어</h2>
           <ul className="mt-3 space-y-1 text-sm">
-            {(myIdeas ?? []).map((i) => <li key={i.id}><Link href={`/ideas/${i.id}`} className="underline">{i.title}</Link></li>)}
+            {(myIdeas ?? []).map((i) => (
+              <li key={i.id} className="flex items-center gap-2">
+                <Link href={`/ideas/${i.id}`} className="underline">{i.title}</Link>
+                <Link href={`/ideas/${i.id}/edit`} className="ml-auto text-xs text-muted underline">수정</Link>
+              </li>
+            ))}
             {!myIdeas?.length && <li className="text-muted"><Link href="/ideas/new" className="underline">첫 아이디어 등록하기</Link></li>}
           </ul>
         </section>

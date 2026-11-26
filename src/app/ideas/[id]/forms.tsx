@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { applyToIdea, requestAccess } from "@/app/actions";
+import { addComment, applyToIdea, deleteComment, requestAccess, toggleLike } from "@/app/actions";
 
 export function AccessRequestForm({ ideaId, ndaId, ndaBody }: { ideaId: string; ndaId: number; ndaBody: string }) {
   const [agreed, setAgreed] = useState(false);
@@ -46,5 +46,71 @@ export function ApplyForm({ ideaId, roles }: { ideaId: string; roles: string[] }
       </button>
       {error && <p className="text-danger">{error}</p>}
     </div>
+  );
+}
+
+export function LikeButton({ ideaId, liked, count, disabled }: { ideaId: string; liked: boolean; count: number; disabled?: boolean }) {
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <span className="inline-flex items-center gap-2">
+      <button
+        type="button"
+        disabled={disabled || pending}
+        aria-pressed={liked}
+        title={disabled ? "내 아이디어에는 좋아요를 누를 수 없어요" : undefined}
+        onClick={() => start(async () => { const r = await toggleLike(ideaId, liked); setError(r.error ?? null); })}
+        className={`inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm disabled:cursor-default ${
+          liked ? "border-ai-fg bg-ai-bg text-ai-fg" : "hover:bg-surface-2"}`}>
+        <span aria-hidden>{liked ? "♥" : "♡"}</span> 좋아요 {count}
+      </button>
+      {error && <span className="text-xs text-danger">{error}</span>}
+    </span>
+  );
+}
+
+export function CommentForm({ ideaId }: { ideaId: string }) {
+  const [body, setBody] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  return (
+    <div className="mt-4 space-y-2 text-sm">
+      <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} maxLength={1000}
+        placeholder="의견이나 질문을 남겨주세요" className="w-full rounded border px-3 py-2" />
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-subtle">댓글은 같은 학교 누구나 볼 수 있어요. 상세 영역 내용은 쓰지 마세요.</p>
+        <button disabled={pending || !body.trim()}
+          onClick={() => start(async () => {
+            const r = await addComment(ideaId, body);
+            if (r.error) setError(r.error); else { setBody(""); setError(null); }
+          })}
+          className="shrink-0 rounded bg-primary px-4 py-2 text-primary-fg disabled:opacity-40">
+          댓글 달기
+        </button>
+      </div>
+      {error && <p className="text-danger">{error}</p>}
+    </div>
+  );
+}
+
+export function DeleteCommentButton({ ideaId, commentId }: { ideaId: string; commentId: number }) {
+  const [pending, start] = useTransition();
+  const [confirming, setConfirming] = useState(false);
+  if (!confirming) {
+    return (
+      <button type="button" onClick={() => setConfirming(true)} className="ml-auto text-subtle underline hover:text-danger">
+        삭제
+      </button>
+    );
+  }
+  return (
+    <span className="ml-auto flex gap-2">
+      <button type="button" disabled={pending}
+        onClick={() => start(async () => { await deleteComment(ideaId, commentId); })}
+        className="text-danger underline disabled:opacity-50">
+        정말 삭제
+      </button>
+      <button type="button" onClick={() => setConfirming(false)} className="text-subtle underline">취소</button>
+    </span>
   );
 }
